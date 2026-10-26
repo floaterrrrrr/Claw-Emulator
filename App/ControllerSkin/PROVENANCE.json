@@ -1,0 +1,55 @@
+{
+  "name": "Control Deck",
+  "created": "2026-10-15",
+  "generator": "Scripts/generate-release-artwork.py",
+  "pillow_version": "12.3.0",
+  "artwork_inputs": "Original geometric paths and letter grids only; no imported artwork or font files",
+  "asset_license": "CC0-1.0 to the extent copyright applies; generator source GPL-3.0-or-later",
+  "layout": "Functional positions preserve the existing control hit targets and 3DS viewport aspect ratios",
+  "assets": [
+    {
+      "path": "App/Assets.xcassets/DeckThumbstick.imageset/DeckThumbstick.png",
+      "sha256": "4f029067177c84546120efe906788404531b008cd05f6a0766e9a6f192bfc4e3"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckDPad.imageset/DeckDPad.png",
+      "sha256": "f917b59186b027a01b8977d7e6918d8368413026515cd62e56c565e3e4e607ae"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckA.imageset/DeckA.png",
+      "sha256": "98973e509d384ba15fc3df0194bdc347dada2d0ce128658c41a4ba113552c48c"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckB.imageset/DeckB.png",
+      "sha256": "2fd0ab13c1e82a45984716a8dae552cdf6f055e57d21f1c70b695d6da4734693"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckY.imageset/DeckY.png",
+      "sha256": "885106f11e400c1453b17bb616a27d2a433e10b0594d44aa24561526f391926c"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckX.imageset/DeckX.png",
+      "sha256": "a8ad8edc89193cfb3cb23c2f8bb83391d14a9ab12aa6dc992a3d924e623ddbd0"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckL.imageset/DeckL.png",
+      "sha256": "458e973f9b7461b9567b7075e1b92ceb84f32cfd6a60a198d18b559ad978da1d"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckR.imageset/DeckR.png",
+      "sha256": "3adf32d0b4c2847295b93ab62670e351096e09bf015a7b07592f3dd10eceb110"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckStart.imageset/DeckStart.png",
+      "sha256": "0c60111535a4f0d1f761a87b89ebfa7f9562e82fb12e1a27bcee425e3d5ea747"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckSelect.imageset/DeckSelect.png",
+      "sha256": "7b14d523f098727309dfd863e65440f24a395432621f6a8573093613941b2f69"
+    },
+    {
+      "path": "App/Assets.xcassets/DeckLandscape.imageset/DeckLandscape.png",
+      "sha256": "6b89ba01070c52da1077cca3cdba520f14c178cae46235fd3607771b9d456897"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "boost-1.89.0": {
+    "repository": "boostorg/boost",
+    "revision": "ef7fea34711a189472893b88205b1dd3c275677b",
+    "url": "https://github.com/boostorg/boost/releases/download/boost-1.89.0/boost-1.89.0-b2-nodocs.tar.gz",
+    "sha256": "aa25e7b9c227c21abb8a681efd4fe6e54823815ffc12394c9339de998eb503fb",
+    "evidence": "Bundled Boost XCFramework contains boost_1_89_0 source build paths",
+    "exact_binary_build_verified": false
+  },
+  "ffmpeg-n8.1.2": {
+    "repository": "FFmpeg/FFmpeg",
+    "revision": "38b88335f99e76ed89ff3c93f877fdefce736c13",
+    "url": "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/38b88335f99e76ed89ff3c93f877fdefce736c13",
+    "sha256": "2ae7e42343cfffb811d15cfe98b6d005f082595fcdf034d30a4ff90cfed9f9c6",
+    "evidence": "Bundled FFmpeg framework reports FFmpeg version n8.1.2",
+    "exact_binary_build_verified": false
+  },
+  "ffmpeg-kit-next": {
+    "repository": "jarrodnorwell/ffmpeg-kit-next",
+    "revision": "a2b7e06cd75626120f430f8e2d92d8e76406f974",
+    "url": "https://codeload.github.com/jarrodnorwell/ffmpeg-kit-next/tar.gz/a2b7e06cd75626120f430f8e2d92d8e76406f974",
+    "sha256": "0c18d08a940cbd8372e2037cbec93a77815f4b0a2f16801d46fe9def9e28b218",
+    "evidence": "FFmpeg binary build path names this fork; this was its newest public commit before the embedded 2026-07-15 build date",
+    "exact_binary_build_verified": false
+  },
+  "moltenvk-v1.4.2-official": {
+    "repository": "KhronosGroup/MoltenVK",
+    "revision": "db66022459ffb663aa2b50f6b018bc2e124f5edf",
+    "url": "https://codeload.github.com/KhronosGroup/MoltenVK/tar.gz/db66022459ffb663aa2b50f6b018bc2e124f5edf",
+    "sha256": "c6ced1eb31827be7f10e2d8d77087486c75e595ab068e665a712d73b99a8ff06",
+    "release_url": "https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-ios.tar",
+    "release_sha256": "b5d947b1660e6e9fed40b9cd2387e160aaab9e80b775c0cef7e14059405178c1",
+    "device_binary_sha256": "6cd5888490d08b36356d04c50c05e2eda5b9bcb3d0338ece693a28987de96aff",
+    "evidence": "Official upstream v1.4.2 release and source. This is a staged replacement candidate; the app still ships a different v1.4.3 binary.",
+    "exact_binary_build_verified": false
+  }
+}

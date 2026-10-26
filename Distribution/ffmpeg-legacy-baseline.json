@@ -1,0 +1,105 @@
+{
+  "baseline_commit": "14b50a2a939c65113b7196d1755f2399977248fd",
+  "mode": "legacy-diagnostic",
+  "release_candidate": false,
+  "artifacts": [
+    {
+      "library": "libavcodec",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavcodec.xcframework/ios-arm64/libavcodec.framework/libavcodec",
+      "platform": "iphoneos",
+      "sha256": "6f7bf514428f5abe88bcb8a0873307f9ce08fef6265ba47c4a9d8c44b31bfcbc",
+      "binary_uuid": "b9e2cdfb-c309-3399-b99a-1d4271d7bf27"
+    },
+    {
+      "library": "libavcodec",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavcodec.xcframework/ios-arm64-simulator/libavcodec.framework/libavcodec",
+      "platform": "iphonesimulator",
+      "sha256": "18bfac89a15f6253e219a61259e7011d878cc0d7179646f123bec16a2a8c04ec",
+      "binary_uuid": "fc9fe856-ae38-3dcf-b024-a77c6f44f838"
+    },
+    {
+      "library": "libavdevice",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavdevice.xcframework/ios-arm64/libavdevice.framework/libavdevice",
+      "platform": "iphoneos",
+      "sha256": "86b8d6c528507a5e271494a3595aaf23d1a370dc0f32739e720174002965f55e",
+      "binary_uuid": "e9738ecf-66e9-3d66-b185-62709a5792d0"
+    },
+    {
+      "library": "libavdevice",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavdevice.xcframework/ios-arm64-simulator/libavdevice.framework/libavdevice",
+      "platform": "iphonesimulator",
+      "sha256": "4bb457f753ba1b1e8b238f7a069a90f8b8e7ea735a6ecfbb9ca3394e62c562a5",
+      "binary_uuid": "03efdeb3-4b96-39ff-8ac9-8b73e3de84f7"
+    },
+    {
+      "library": "libavfilter",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavfilter.xcframework/ios-arm64/libavfilter.framework/libavfilter",
+      "platform": "iphoneos",
+      "sha256": "1f3d000d12db08980951e0c7a60614c29a30844269ec72b79e57f0db31d17c7d",
+      "binary_uuid": "89d22d3e-45bc-3cf1-ab37-4fde0538a003"
+    },
+    {
+      "library": "libavfilter",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavfilter.xcframework/ios-arm64-simulator/libavfilter.framework/libavfilter",
+      "platform": "iphonesimulator",
+      "sha256": "9d041a082811fd651f1569324da5082e4156408f811a0e8b5b535123bc5d35a4",
+      "binary_uuid": "711c48b4-0c1a-343f-a2e5-d325dcf952dd"
+    },
+    {
+      "library": "libavformat",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavformat.xcframework/ios-arm64/libavformat.framework/libavformat",
+      "platform": "iphoneos",
+      "sha256": "02ac996c962b3ee2e4059d296546ffd3d5905f04763578d4542132791d5f55f9",
+      "binary_uuid": "97bfca1c-65d5-3d31-8629-6bbd186af05b"
+    },
+    {
+      "library": "libavformat",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavformat.xcframework/ios-arm64-simulator/libavformat.framework/libavformat",
+      "platform": "iphonesimulator",
+      "sha256": "4a2f15b778ea5ac12485092e1fdd513bb14f2cb4fc389b5ca8eede9852522e95",
+      "binary_uuid": "7071098e-2cf0-3b29-9842-3a4ce35bd50c"
+    },
+    {
+      "library": "libavutil",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavutil.xcframework/ios-arm64/libavutil.framework/libavutil",
+      "platform": "iphoneos",
+      "sha256": "092843bf676da0b1d3eeb7e2fb5a2839fab795e0dfc45fb71dae154b5ba23172",
+      "binary_uuid": "641d1528-4ec8-3536-b7f2-0d5b5b926a00"
+    },
+    {
+      "library": "libavutil",
+      "path": "ThirdParty/Dependencies/FFmpeg/libavutil.xcframework/ios-arm64-simulator/libavutil.framework/libavutil",
+      "platform": "iphonesimulator",
+      "sha256": "009109df9ce3a90b576b53adccada4e1707e3af8bad516a48d2cd25567af0cb4",
+      "binary_uuid": "8ea4f57d-5a6b-3468-9354-8c94baebc672"
+    },
+    {
+      "library": "libswresample",
+      "path": "ThirdParty/Dependencies/FFmpeg/libswresample.xcframework/ios-arm64/libswresample.framework/libswresample",
+      "platform": "iphoneos",
+      "sha256": "1bcd18a3fd1bb1bcecd61fb06daf7df6752d68be71480ca01f78bebc47363643",
+      "binary_uuid": "20ca9800-7aa6-3355-b1b9-25de5dd5eafb"
+    },
+    {
+      "library": "libswresample",
+      "path": "ThirdParty/Dependencies/FFmpeg/libswresample.xcframework/ios-arm64-simulator/libswresample.framework/libswresample",
+      "platform": "iphonesimulator",
+      "sha256": "f196c502ee932fa06cda3427dbf73e52a0f711693d84dbe6da2924e9cb655c0f",
+      "binary_uuid": "3fc11a09-b96e-3159-92fc-2f04bef9dff8"
+    },
+    {
+      "library": "libswscale",
+      "path": "ThirdParty/Dependencies/FFmpeg/libswscale.xcframework/ios-arm64/libswscale.framework/libswscale",
+      "platform": "iphoneos",
+      "sha256": "e1e2d1f43979aa20e89547ef0fb8bbcf3035e4839da4788d769b80b10b1d6854",
+      "binary_uuid": "05a68e9a-91ce-32ed-9be0-2b6c5cb80dc0"
+    },
+    {
+      "library": "libswscale",
+      "path": "ThirdParty/Dependencies/FFmpeg/libswscale.xcframework/ios-arm64-simulator/libswscale.framework/libswscale",
+      "platform": "iphonesimulator",
+      "sha256": "dfd8306b6f1a95a04fcbf6008141925789a90df6e3868f90b97c3b5aa2ac6332",
+      "binary_uuid": "b7102fbe-70b0-376e-b355-e79348e50a8d"
+    }
+  ]
+}

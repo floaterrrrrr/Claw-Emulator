@@ -1,0 +1,62 @@
+--- a/src/libretro/config/config.cpp
++++ b/src/libretro/config/config.cpp
+@@ -50,7 +50,9 @@
+ #include <SPI_Firmware.h>
+ #include <FreeBIOS.h>
+ #include <file/config_file.h>
++#ifdef HAVE_NETWORKING_DIRECT_MODE
+ #include <Net_PCap.h>
++#endif
+ 
+ #include "config/constants.hpp"
+ #include "config/definitions.hpp"
+--- a/src/libretro/net/net.hpp
++++ b/src/libretro/net/net.hpp
+@@ -48,7 +48,9 @@
+ 
+         int SendPacket(std::span<std::byte> data) noexcept;
+         int RecvPacket(melonDS::u8* data) noexcept;
++#ifdef HAVE_NETWORKING_DIRECT_MODE
+         [[nodiscard]] std::vector<melonDS::AdapterData> GetAdapters() const noexcept;
++#endif
+         void Apply(const CoreConfig& config) noexcept;
+         [[nodiscard]] NetworkMode GetNetworkMode() const noexcept;
+     private:
+--- a/src/libretro/net/net.cpp
++++ b/src/libretro/net/net.cpp
+@@ -125,6 +125,7 @@
+     return _net.RecvPacket(data, 0);
+ }
+ 
++#ifdef HAVE_NETWORKING_DIRECT_MODE
+ vector<melonDS::AdapterData> MelonDsDs::NetState::GetAdapters() const noexcept
+ {
+     ZoneScopedN(TracyFunction);
+@@ -150,6 +151,8 @@
+         strncmp(lhs.DeviceName, rhs.DeviceName, sizeof(lhs.DeviceName)) == 0
+     ;
+ }
++
++#endif
+ 
+ void MelonDsDs::NetState::Apply(const CoreConfig& config) noexcept
+ {
+--- a/src/libretro/format.cpp
++++ b/src/libretro/format.cpp
+@@ -81,6 +81,7 @@
+ }
+ #endif
+ 
++#ifdef HAVE_NETWORKING_DIRECT_MODE
+ auto fmt::formatter<MelonDsDs::FormattedPCapFlags>::format(MelonDsDs::FormattedPCapFlags e, format_context& ctx) const -> decltype(ctx.out()) {
+     auto flags = static_cast<uint32_t>(e);
+ 
+@@ -119,6 +120,8 @@
+     return formatter<decltype(flagNames)>::format(flagNames, ctx);
+ }
+ 
++#endif
++
+ auto fmt::formatter<MelonDsDs::BiosType>::format(MelonDsDs::BiosType c, format_context& ctx) const -> decltype(ctx.out()) {
+     string_view name = "unknown";
+     switch (c) {

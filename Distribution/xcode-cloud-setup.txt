@@ -1,0 +1,70 @@
+Claw — Xcode Cloud / internal TestFlight
+
+Repository preparation
+- Stable project: Claw.xcodeproj/project.pbxproj
+- Shared scheme: Claw, Release archive, iOS
+- Committed package lockfile: project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+- Public Configuration/Signing.xcconfig has generic defaults and an optional
+  include of the ignored .build-config/Signing.xcconfig file.
+- ci_scripts/ci_post_clone.sh prepares dependencies and local signing config.
+  It deliberately does not regenerate the project or force package resolution.
+- ci_scripts/ci_post_xcodebuild.sh independently checks the finished archive.
+- Source dependencies rebuild for iOS 17; CMake caches are separated by Xcode
+  version so a workflow update cannot silently keep an older compiler cache.
+- Both dependency builders retry interrupted downloads up to four times with
+  bounded backoff. Archives enter the cache only after SHA-256 verification;
+  incomplete transfers are discarded and valid cached files are reused.
+- A failed dependency setup can also produce catalog/package-resolution errors
+  for missing local binary artifacts. Resolve the first post-clone error before
+  treating those downstream messages as separate project-configuration issues.
+
+Account and workflow
+1. Publish the prepared source branch to the existing GitHub repository.
+   Keep .env, .build-config, keys, provisioning profiles, and artifacts ignored.
+2. In Xcode, open Claw.xcodeproj, choose Report Navigator > Cloud > Get Started.
+   Select Claw iOS, the existing Apple team, and the existing Claw: Emulator app.
+   Do not create another app record or use a different app's workflow.
+3. Grant Xcode Cloud access only to this repository. A GitHub repository admin
+   may need to complete this authorization. Do not grant all-repository access.
+4. Choose scheme Claw and an iOS Archive action. Use Xcode 27.1 or a newer
+   accepted release/RC, rather than the locally installed 27.2 beta.
+5. Start with manual builds on the prepared source branch. Use the matching
+   released macOS image offered by Xcode Cloud. Do not enable PR-triggered
+   distribution to internal testers for unreviewed public contributions.
+6. Add Internal TestFlight Testing as a post-action, selecting only Claw Testing.
+   This existing group has one tester: the owner. No external/public testers
+   or App Store release submission are requested.
+7. Set Xcode Cloud Settings > Build Number > Next Build Number to at least 26.
+8. Start one build, inspect post-clone/compile/archive logs, and verify it appears
+   in TestFlight and in Claw Testing before treating Cloud setup as complete.
+
+Environment
+Set CLAW_APPLE_TEAM_ID (the 10-character Apple signing team) and CLAW_BUNDLE_ID
+as redacted environment variables in this workflow. Do not commit their values.
+The first hosted run could not use Apple's supplied team identity directly.
+CI_TEAM_ID and CI_BUNDLE_ID remain fallbacks; CI_BUILD_NUMBER and repository
+paths come from Apple.
+Leave CLAW_DEVELOPER_DIR and CLAW_ASC_API_* unset in Cloud: the workflow selects
+Xcode, and Apple handles signing and delivery. No Apple password or local .env
+file is needed. Public support/privacy hosting remains deferred by the owner.
+
+Export compliance
+The owner completed the App Store Connect declaration on October 25, 2026.
+App/Info.plist now commits ITSAppUsesNonExemptEncryption=false. Leave
+CLAW_USES_NON_EXEMPT_ENCRYPTION and CLAW_ENCRYPTION_EXPORT_COMPLIANCE_CODE
+unset/empty to inherit it automatically. An existing explicit true override
+supersedes the committed value; remove it unless the owner's decision changes.
+Verify the Archive metadata step logs the false value on the next Cloud build.
+Current next-build and release steps are in Distribution/release-handoff.md.
+
+Onboarding with an xcconfig bundle identifier
+Apple may require the bundle identifier to be explicitly set in Xcode during
+initial onboarding. If so, use the owner's local setting to associate Claw with
+its existing app record, then restore the public variable-based project before
+publishing source. Never commit the local identifier or team as a workaround.
+
+References
+https://developer.apple.com/documentation/xcode/setting-up-your-project-to-use-xcode-cloud
+https://developer.apple.com/documentation/xcode/making-dependencies-available-to-xcode-cloud
+https://developer.apple.com/documentation/xcode/writing-custom-build-scripts
+https://developer.apple.com/documentation/xcode/distributing-your-xcode-cloud-builds-through-testflight

@@ -1,0 +1,33 @@
+Claw Privacy Policy
+
+Effective October 25, 2026
+
+Claw is an iPhone game emulator. No account is required. Claw does not include advertising, analytics, or tracking SDKs, and does not operate a cloud backup or game-upload service.
+
+Your files and settings
+Games you import are copied into Claw's app storage. Saves, save states, console files, shader caches, and the game library are stored on your device. Preferences such as graphics, controls, and volume are stored in the app's preferences. Claw does not send these files or preferences to the developer.
+
+Claw reads file information to import and manage files, checks available storage before extracting a game, and uses timers to coordinate emulation, audio, and video. It does not use these APIs to fingerprint your device or send available-storage information off-device.
+
+A local 3DS launch diagnostic records the app build, source commit, selected FFmpeg build mode, and last initialization stage. A framework-loading diagnostic records bundled framework paths, versions, and loader errors. These diagnostics contain no ROM names, console keys, or guest data, and are not sent to the developer automatically. You can inspect or delete them in the app's EmulationData folder in Files. Startup stages and framework errors are also printed to the device's development console.
+
+A separate local diagnostic stores up to 16 critical core source locations per launch (source filename, line number, function, and subsystem number). It omits message text and arguments, including game data and credentials. It stays in EmulationData on your device unless you choose to share it.
+
+Backups and sharing
+Imported game copies are excluded from device backup. Other app data may be included in backups managed by iOS according to your device settings. The Export saves and system data action creates an archive, which can include imported console keys. You choose whether and where to share that archive through the iOS share sheet. Review the contents before sharing it.
+
+Networking and links
+Claw displays artwork you choose, an icon embedded in your imported game, or a locally generated badge. It does not look up game titles or download cover artwork. Game files, save data, keys, and preferences are not uploaded to the developer.
+
+Claw includes no multiplayer interface or developer telemetry service. Its emulator core contains networking services that imported software may use; any such connection is to the destination requested by that software. External source and support links open third-party websites, which have their own privacy practices. Your file providers, backup providers, and share destinations are also governed by their own policies.
+
+Camera and microphone
+Compatible games may request camera or microphone input. Claw asks for the relevant iOS permission before using these features. Input is provided to the emulated game; Claw does not send it to a developer-operated service. You can change permissions in iOS Settings. Any networking performed by imported software follows the destination that software requests.
+
+Deletion
+You can manage Games and EmulationData in Files under On My iPhone > Claw. Deleting the app removes its local container; copies you exported, shared, or backed up elsewhere must be removed separately. There is no Claw account to delete.
+
+Support
+Contact: feedback@salamlabs.io
+Source code: https://github.com/floaterrrrrr/Claw-Emulator
+To report a privacy concern, email support. Do not include game files, console keys, or private save data in a public issue. If you contact support, your email address and the information you choose to send are used to respond to your request.

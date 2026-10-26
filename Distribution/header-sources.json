@@ -1,0 +1,11 @@
+{
+  "boost-icl": {
+    "repository": "boostorg/icl",
+    "revision": "7de3f55655984e22f843238f7bd795fea3a5e08d",
+    "ref": "boost-1.92.0",
+    "url": "https://codeload.github.com/boostorg/icl/tar.gz/7de3f55655984e22f843238f7bd795fea3a5e08d",
+    "sha256": "503e513d5d68c97e067153bdedf9c773accd572150a1229a0d8f32ab251b5d7d",
+    "scope": "Header-only boost/icl override on Boost 1.89.0; fixes libc++ 22 interval lookup (upstream PR 54). Compiled Boost libraries remain 1.89.0.",
+    "license": "BSL-1.0"
+  }
+}

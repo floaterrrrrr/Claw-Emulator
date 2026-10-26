@@ -1,0 +1,115 @@
+Claw App Store submission
+
+Current evidence: Distribution/release-validation.md and build-102-validation.json.
+Build 102 is Apple-validated for TestFlight; it is not ready for public submission.
+The account setup notes below are historical and do not close current release gates.
+
+Identity prepared locally
+App Store name: Claw Emulator: 3DS GBA NES GBC (observed October 25, 2026)
+iPhone display name: Claw
+Bundle ID: CLAW_BUNDLE_ID in local .env (registered)
+Team: CLAW_APPLE_TEAM_ID in local .env
+SKU: claw-ios
+Version: 1.0.0; build 102 inspected, local next-build default 103 (Cloud numbers independently)
+Existing Xcode target/project name: Claw (internal only)
+App Store Connect ID: CLAW_ASC_APP_ID in local .env
+Local resolved metadata: .build-config/app-store-metadata.json
+
+Apple account setup
+1. HISTORICAL: registered an explicit App ID for the configured bundle ID under the
+   existing Salam Labs team. No Family Controls,
+   push, App Groups, Apple login, or other special entitlement is required by
+   this app. Do not reuse Salam App's identifier or provisioning profile.
+2. HISTORICAL: created the Claw app for iOS, English (U.S.), this bundle ID, and
+   SKU claw-ios. App access is limited to the default mandatory account roles.
+   The description, promotional text, keywords, review contact, no-login
+   setting, version 1.0.0, and manual release are saved as a draft.
+3. HISTORICAL: signed in to Xcode with the existing Apple account. Automatic
+   signing uses the configured local team. No
+   signing keys or API credentials belong in this repository.
+   Local archive signing and App Store IPA export succeeded. The exported
+   build/AppStore/Export/Claw.ipa has the explicit Claw distribution profile.
+   To repeat only the export (the full archive has already built):
+   python3 Scripts/distribution_config.py generate --require-signing
+   python3 Scripts/distribution_config.py xcodebuild -- \
+     -exportArchive -archivePath build/AppStore/Claw.xcarchive \
+     -exportPath build/AppStore/Export \
+     -exportOptionsPlist .build-config/ExportOptions.plist -allowProvisioningUpdates
+
+Current distribution: TestFlight only; public submission is pending
+   Upload the existing archive with bash Scripts/upload-testflight.sh.
+   It uploads to Apple without submitting an App Store release. Check build
+   processing and configure the intended testers in the TestFlight tab.
+   Public App Store listing pages/screenshots still need to be completed.
+   Use an Xcode/SDK version currently accepted for App Store uploads.
+
+Build and upload
+4. Use a released Xcode accepted for App Store uploads. Verify the toolchain
+   used for the exact archive selected for release.
+5. Run bash Scripts/check-build.sh, then bash Scripts/archive-app-store.sh.
+   For compilation without signing, use the archive script's --unsigned flag.
+   The App Store archive explicitly uses generic ARM64 instructions; do not
+   distribute the developer-only latest/A15-optimized IPA to all iOS 17 devices.
+   Device and Apple Silicon Simulator dependencies are rebuilt from the pinned
+   source manifest for iOS 17. The archive validator checks actual Mach-O
+   deployment versions, including embedded frameworks. The completed local
+   signed archive has no linker warnings about newer-iOS dependencies.
+6. In Xcode Organizer validate the signed archive and upload, or upload the
+   exported IPA using Apple's Transporter. Local export does not upload it.
+   Increment App/Info.plist's CFBundleVersion and synchronize the metadata draft
+   before uploading another build.
+   Run python3 Scripts/validate-app-store-archive.py to check the actual archived
+   identity, iPhone target, required resources, executable, and debug symbols.
+7. Test the actual signed build on supported iPhones through TestFlight.
+   Check fresh launch/import, large game import, audio/controllers, saving and
+   loading, background/resume, rotation, low memory, and export. Include older
+   supported iOS 17 devices, not only the newest phone. Simulator/mock-core
+   tests cannot establish playable emulator performance.
+
+Public pages and listing
+8. Publish the text in App/Legal/PrivacyPolicy.txt at a public HTTPS URL.
+   A support-page draft is in Distribution/support.md. Once the repository is
+   exported as a new clean source snapshot, verify both pages load without signing in; then fill the
+   planned URLs from Distribution/app-store-metadata.json into support_url and
+   privacy_policy_url. Support email: feedback@salamlabs.io. The approved
+   account holder's review contact is saved in App Store Connect; its private
+   details are intentionally absent from the source metadata file.
+9. Review the metadata draft, set pricing/availability, complete age-rating,
+   content-rights, encryption/export, and other applicable questionnaires.
+   Export compliance was completed by the owner on October 25, 2026. The
+   committed ITSAppUsesNonExemptEncryption=false records that decision for
+   future builds. Confirm the next archive preserves it; see release-handoff.md.
+   Do not declare accessibility features without testing them.
+10. Check final archive resources for PrivacyInfo.xcprivacy and bundled legal
+    documents. Review App Store Connect's privacy report and any required SDK
+    manifests/signatures. The app has no analytics/ads/account code; imported
+    software's networking services still require attention in the final audit.
+11. Capture screenshots from the real app with content you have rights to use.
+    Do not use the mocked frontend fixture as evidence of actual gameplay.
+    Follow the current screenshot requirements shown by App Store Connect.
+
+Content and licensing release gates
+12. The current app icon is the Claw scratch mark. Confirm rights to the mark
+    and all screenshot, cover, and promotional imagery before release. Do not
+    include commercial ROMs or console keys in the repository or reviewer kit.
+13. Audit all source and binary dependency licenses, including GPL Cytrus,
+    SharedDependencies, and FFmpeg. Resolve App Store terms compatibility and
+    provide complete corresponding source/build materials for the exact
+    shipped versions where required. Credits, source links, and a copy of the
+    GPL alone do not establish compliance. Do not mark this gate complete
+    merely because the in-app notices were added. See the concrete unresolved
+    binary provenance in Distribution/source-readiness.md.
+14. Supply App Review a lawfully redistributable supported test game, its
+    license and exact reproduction steps. Verify actual compatibility first.
+    Distribution/reviewer-test.md describes the original CC0 test ROMs and
+    reviewer steps; generate and test them on the signed release candidate.
+    Complete the reviewer notes with device testing results. Do not supply
+    someone else's commercial ROM or console keys.
+15. Select the validated build, review all answers, and submit for review.
+    Confirm manual release after approval in the final listing draft.
+
+Apple references
+https://developer.apple.com/help/app-store-connect/create-an-app-record/add-a-new-app/
+https://developer.apple.com/app-store/review/guidelines/
+https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api
+https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/

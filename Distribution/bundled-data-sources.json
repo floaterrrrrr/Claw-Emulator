@@ -1,0 +1,14 @@
+{
+  "citra-system-archives": {
+    "repository": "B3n30/citra_system_archives",
+    "revision": "5e6b5df2f58811b75f62a526f6602732e2ad26db",
+    "url": "https://codeload.github.com/B3n30/citra_system_archives/tar.gz/5e6b5df2f58811b75f62a526f6602732e2ad26db",
+    "sha256": "cc01aec5965d829dccdeea1714672293a4099af7aa909cbc9aa2d572341358a1"
+  },
+  "citra-bad-word-list": {
+    "repository": "B3n30/citra_system_archives",
+    "revision": "47cdc9394501a61406529e3037763745c9642b23",
+    "url": "https://codeload.github.com/B3n30/citra_system_archives/tar.gz/47cdc9394501a61406529e3037763745c9642b23",
+    "sha256": "709346ff7cea2b2f1d1d22f54302a411eeebd3b99a162479be51f2f0a64faae2"
+  }
+}

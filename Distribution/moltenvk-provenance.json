@@ -1,0 +1,45 @@
+{
+  "component": "MoltenVK",
+  "reported_version": "1.4.3",
+  "license": "Apache-2.0",
+  "origin": {
+    "repository": "https://github.com/folium-app/Folium",
+    "revision": "3b23e1d41247f7b98a7f01ad6ade02bd28cc3c29",
+    "method": "Local Git blob SHA-1 and length equal the entries in the pinned public Folium Git tree; SHA-256 recorded independently."
+  },
+  "artifacts": [
+    {
+      "path": "ThirdParty/Dependencies/MoltenVK.xcframework/ios-arm64/MoltenVK.framework/MoltenVK",
+      "size": 4840496,
+      "sha256": "514b38801038ec21b1f576119a8aeb47296d72d8cdeda149f15fc502e5523450",
+      "upstream_git_blob": "6ed99d24073a0fffb5a34a35c17122798a4f96a5",
+      "upstream_path": "Dependencies/MoltenVK.xcframework/ios-arm64/MoltenVK.framework/MoltenVK"
+    },
+    {
+      "path": "ThirdParty/Dependencies/MoltenVK.xcframework/ios-arm64_x86_64-simulator/MoltenVK.framework/MoltenVK",
+      "size": 9919192,
+      "sha256": "0760255aed129228743bcdb9e6e58a6acc399c802436d1695d714c8c394a26d2",
+      "upstream_git_blob": "c59b07d795c5a6f2f67001d12c1b317c99b11239",
+      "upstream_path": "Dependencies/MoltenVK.xcframework/ios-arm64_x86_64-simulator/MoltenVK.framework/MoltenVK"
+    }
+  ],
+  "claw_binary_modifications": "None; copied prebuilt distribution, without changing the graphics driver.",
+  "upstream_build_source_revision": null,
+  "upstream_build_recipe": null,
+  "provenance_scope": "Exact downstream binary origin verified. Folium does not publish an upstream source pin/build recipe for this 1.4.3 artifact; no reproducible-build claim is made.",
+  "notice_references": {
+    "moltenvk_revision": "db66022459ffb663aa2b50f6b018bc2e124f5edf",
+    "spirv_cross_revision": "6c09849fe88c48eaed08413aa022aaa136a3a057",
+    "note": "Known upstream license and copyright texts, not evidence of the binary source revision. No separate NOTICE found in inspected Folium framework or MoltenVK source distribution."
+  },
+  "license_texts": [
+    {
+      "path": "Distribution/licenses/MoltenVK-Apache-2.0.txt",
+      "sha256_lf_utf8": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "Distribution/licenses/SPIRV-Cross-Apache-2.0.txt",
+      "sha256_lf_utf8": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  ]
+}

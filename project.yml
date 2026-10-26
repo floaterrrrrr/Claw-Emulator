@@ -1,0 +1,301 @@
+name: Claw
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CLANG_CXX_LANGUAGE_STANDARD: gnu++23
+    CLANG_ENABLE_OBJC_ARC: YES
+    GCC_C_LANGUAGE_STANDARD: gnu17
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
+    ALWAYS_SEARCH_USER_PATHS: NO
+    CODE_SIGNING_ALLOWED: NO
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_BITCODE: NO
+    # Full LTO for the application and native static library. Prebuilt framework
+    # machine code cannot be re-optimized by this build.
+    LLVM_LTO: "YES"
+    DEAD_CODE_STRIPPING: YES
+    GCC_FAST_MATH: NO
+    # Manual/App Store builds must run on every supported iOS 17 iPhone.
+    # CI validates one A15-compatible artifact; hardware budgets switch at runtime.
+    CLAW_CPU_TARGET: generic
+    # Keep the mobile profile identical in Debug and Release.
+    ENABLE_WEB_SERVICE: "0"
+    CITRA_USE_DISCORD_PRESENCE: "OFF"
+    ENABLE_QT: "0"
+    DISABLE_JIT: "1"
+    STRICT_INTERPRETER: "1"
+    CLAW_DISABLE_LOGGING: "1"
+    GCC_PREPROCESSOR_DEFINITIONS:
+      - "$(inherited)"
+      - ENABLE_WEB_SERVICE=0
+      - CITRA_USE_DISCORD_PRESENCE=0
+      - ENABLE_QT=0
+      - DISABLE_JIT=1
+      - STRICT_INTERPRETER=1
+      - ENABLE_REMOTE_INPUT=0
+      - CLAW_DISABLE_LOGGING=1
+    HEADER_SEARCH_PATHS:
+      - "$(inherited)"
+      - "$(SRCROOT)/.build-headers/boost"
+      - "$(SRCROOT)/.build-headers/fmt"
+      - "/opt/homebrew/include"
+      - "/opt/homebrew/include/boost"
+  configs:
+    Release:
+      GCC_OPTIMIZATION_LEVEL: "3"
+      # Xcode's NS_BLOCK_ASSERTIONS affects Objective-C only. Keep C/C++
+      # standard and Boost assertions disabled in Release, enabled in Debug.
+      GCC_PREPROCESSOR_DEFINITIONS:
+        - "$(inherited)"
+        - ENABLE_WEB_SERVICE=0
+        - CITRA_USE_DISCORD_PRESENCE=0
+        - ENABLE_QT=0
+        - DISABLE_JIT=1
+        - STRICT_INTERPRETER=1
+        - ENABLE_REMOTE_INPUT=0
+        - CLAW_DISABLE_LOGGING=1
+        - NDEBUG=1
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      SWIFT_COMPILATION_MODE: wholemodule
+      DEPLOYMENT_POSTPROCESSING: YES
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+packages:
+  SharedDependencies:
+    path: ThirdParty/SharedDependencies
+  Zstd:
+    path: ThirdParty/Zstd
+targets:
+  ClawNative:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: Native
+        excludes:
+          - MobileDeviceProfile.mm
+          - Retro/RetroRuntime.cpp
+          - Retro/RetroCore.mm
+          - SevenZipSDK
+      - path: Native/SevenZipSDK
+        compilerFlags: "-DZ7_PPMD_SUPPORT -DZ7_EXTRACT_ONLY"
+      - path: Native/MobileDeviceProfile.mm
+        compilerFlags: "-Wall -Wextra -Werror"
+      - path: Native/Retro/RetroRuntime.cpp
+        compilerFlags: "-Wall -Wextra -Werror"
+      - path: Native/Retro/RetroCore.mm
+        compilerFlags: "-Wall -Wextra -Werror"
+      - path: ThirdParty/Cytrus
+        excludes:
+          - include
+          - bridge.cpp
+          - UPSTREAM.md
+          - web_service
+          - common/web_util.cpp
+          - common/logging/backend.cpp
+          - network/announce_multiplayer_session.cpp
+          - core/arm/dynarmic/arm_dynarmic.cpp
+          - core/arm/dynarmic/arm_dynarmic_cp15.cpp
+          - core/arm/dynarmic/arm_exclusive_monitor.cpp
+          - video_core/shader/shader_jit*.cpp
+          - video_core/renderer_vulkan/xxhash.h
+          - core/gdbstub
+          - core/rpc
+          - audio_core/openal_input.cpp
+          - audio_core/openal_sink.cpp
+          - audio_core/sdl3_sink.cpp
+          - input_common/sdl/sdl3_impl.cpp
+          - input_common/sdl/sdl3_joystick.cpp
+          - input_common/udp
+          - audio_core/dsp_interface.cpp
+          # CoreAudio uses ApplePCMConverter, not the desktop SoundTouch path.
+          - audio_core/time_stretch.cpp
+      # This iOS translation unit only scales already-decoded PCM volume. Guest
+      # CPU/PICA floating-point and finite-input validation keep precise math.
+      - path: ThirdParty/Cytrus/audio_core/dsp_interface.cpp
+        compilerFlags: "-ffast-math"
+    settings:
+      base:
+        PRODUCT_NAME: ClawNative
+        SKIP_INSTALL: YES
+        # Use the explicit include roots below. Xcode's flattened header maps
+        # otherwise select an unrelated private xxhash.h with no XXH3 API.
+        USE_HEADERMAP: NO
+        # The Swift aggregate product does not export all transitive C/C++ headers.
+        # List the public include roots actually consumed by the core and bridge.
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/ThirdParty/Zstd/lib"
+          - "$(SRCROOT)/ThirdParty/Zstd/contrib"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/cryptopp/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/dds_ktx/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/httplib/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/inih/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/lodepng/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/metal_cpp/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/miniz/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/microprofile/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/nihstro/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/nlohmann/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/osa/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/tsl/include"
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/xxhash/include"
+          - "$(inherited)"
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - FOR_CYTRUS
+          - HAVE_FASTINTERP=1
+          - HAVE_COREAUDIO=1
+          - ENABLE_VULKAN=1
+          - CLAW_ENABLE_METALFX=1
+          # HTTPS emulation is a guest service, separate from host web/telemetry.
+          - CPPHTTPLIB_OPENSSL_SUPPORT=1
+        OTHER_CPLUSPLUSFLAGS:
+          - "$(inherited)"
+          - "-Wno-shorten-64-to-32"
+          - "-fno-fast-math"
+          - "-mcpu=$(CLAW_CPU_TARGET)"
+        USER_HEADER_SEARCH_PATHS:
+          # SwiftPM merges exported headers, including Zstd's private xxhash.h.
+          # Select standalone xxHash (with XXH3) before that merged include root.
+          - "$(SRCROOT)/ThirdParty/SharedDependencies/Sources/xxhash/include"
+          - "$(SRCROOT)/ThirdParty/Cytrus/include"
+          - "$(SRCROOT)/Native"
+        SYSTEM_HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/.build-headers/boost"
+          - "$(SRCROOT)/.build-headers/vulkan"
+          - "$(SRCROOT)/.build-headers/vma"
+          - "$(SRCROOT)/.build-headers/glslang"
+          - "$(SRCROOT)/.build-headers/glslang/glslang"
+          - "$(SRCROOT)/.build-headers/spirv"
+    dependencies:
+      - package: SharedDependencies
+        product: SharedDependencies
+      - package: Zstd
+        product: libzstd
+      - package: Zstd
+        product: libzstdwrapper
+      - package: Zstd
+        product: libseekable_format
+      - framework: ThirdParty/Dependencies/Boost/libboost_iostreams.xcframework
+      - framework: ThirdParty/Dependencies/Boost/libboost_serialization.xcframework
+      - framework: ThirdParty/Dependencies/FFmpeg/libavcodec.xcframework
+      - framework: ThirdParty/Dependencies/FFmpeg/libavdevice.xcframework
+      - framework: ThirdParty/Dependencies/FFmpeg/libavfilter.xcframework
+      - framework: ThirdParty/Dependencies/FFmpeg/libavformat.xcframework
+      - framework: ThirdParty/Dependencies/FFmpeg/libavutil.xcframework
+      - framework: ThirdParty/Dependencies/FFmpeg/libswresample.xcframework
+      - framework: ThirdParty/Dependencies/FFmpeg/libswscale.xcframework
+  Claw:
+    type: application
+    platform: iOS
+    configFiles:
+      Debug: Configuration/Signing.xcconfig
+      Release: Configuration/Signing.xcconfig
+    sources:
+      - path: App
+        excludes:
+          - Info.plist
+          - ControllerSkin
+      - path: App/ControllerSkin
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(CLAW_BUNDLE_ID)"
+        PRODUCT_NAME: Claw
+        TARGETED_DEVICE_FAMILY: "1"
+        DEVELOPMENT_TEAM: "$(CLAW_APPLE_TEAM_ID)"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGNING_ALLOWED: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIconOrange AppIconBlue AppIconGreen AppIconRed"
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/Native/ClawCore.h"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/Info.plist
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/Frameworks"
+        OTHER_LDFLAGS:
+          - "$(inherited)"
+          - "-ObjC"
+          - "-lc++"
+          - "-lz"
+          - "-lbz2"
+          - "-lresolv"
+    postBuildScripts:
+      - name: Stage bundled core debug symbols
+        script: bash "$SRCROOT/Scripts/stage-retro-symbols.sh"
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - "$(SRCROOT)/Scripts/stage-retro-symbols.sh"
+          - "$(SRCROOT)/.build-retro/Frameworks/$(PLATFORM_NAME)"
+        outputFiles:
+          - "$(DWARF_DSYM_FOLDER_PATH)/ClawmGBA.framework.dSYM"
+          - "$(DWARF_DSYM_FOLDER_PATH)/ClawNES.framework.dSYM"
+          - "$(DWARF_DSYM_FOLDER_PATH)/ClawDS.framework.dSYM"
+    dependencies:
+      - target: ClawNative
+      - package: SharedDependencies
+        product: SharedDependencies
+      - package: Zstd
+        product: libzstd
+      - package: Zstd
+        product: libzstdwrapper
+      - package: Zstd
+        product: libseekable_format
+      - framework: ThirdParty/Dependencies/Boost/libboost_iostreams.xcframework
+        embed: false
+      - framework: ThirdParty/Dependencies/Boost/libboost_serialization.xcframework
+        embed: false
+      - framework: ThirdParty/Dependencies/MoltenVK.xcframework
+        embed: true
+      - framework: ThirdParty/Dependencies/FFmpeg/libavcodec.xcframework
+        embed: true
+      - framework: ThirdParty/Dependencies/FFmpeg/libavdevice.xcframework
+        embed: true
+      - framework: ThirdParty/Dependencies/FFmpeg/libavfilter.xcframework
+        embed: true
+      - framework: ThirdParty/Dependencies/FFmpeg/libavformat.xcframework
+        embed: true
+      - framework: ThirdParty/Dependencies/FFmpeg/libavutil.xcframework
+        embed: true
+      - framework: ThirdParty/Dependencies/FFmpeg/libswresample.xcframework
+        embed: true
+      - framework: ThirdParty/Dependencies/FFmpeg/libswscale.xcframework
+        embed: true
+      - sdk: AVFoundation.framework
+      - sdk: AudioToolbox.framework
+      - sdk: CoreAudio.framework
+      - sdk: CoreImage.framework
+      - sdk: CoreMedia.framework
+      - sdk: CoreVideo.framework
+      - sdk: GameController.framework
+      - sdk: Metal.framework
+      - sdk: MetalFX.framework
+      - sdk: MetalKit.framework
+      - framework: .build-retro/Frameworks/$(PLATFORM_NAME)/ClawmGBA.framework
+        embed: true
+        link: false
+      - framework: .build-retro/Frameworks/$(PLATFORM_NAME)/ClawNES.framework
+        embed: true
+        link: false
+      - framework: .build-retro/Frameworks/$(PLATFORM_NAME)/ClawDS.framework
+        embed: true
+        link: false
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: UIKit.framework
+schemes:
+  Claw:
+    build:
+      targets:
+        Claw: all
+    run:
+      config: Release
+    archive:
+      config: Release

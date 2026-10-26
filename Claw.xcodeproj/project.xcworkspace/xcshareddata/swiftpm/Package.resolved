@@ -1,0 +1,22 @@
+{
+  "originHash" : "511a4ef82506e8770d7ddbb004240b5c42bd82024f3e3a2f9f84485370e1b294",
+  "pins" : [
+    {
+      "identity" : "openssl",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/krzyzanowskim/OpenSSL",
+      "state" : {
+        "revision" : "4b1188ba947ddc23d03b13096b9e44b804e146c9"
+      }
+    },
+    {
+      "identity" : "plzmasdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jarrodnorwell/PLzmaSDK",
+      "state" : {
+        "revision" : "c69ff6acb4df788885cc4865d46e1a442e6f50a5"
+      }
+    }
+  ],
+  "version" : 3
+}

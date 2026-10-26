@@ -1,0 +1,4 @@
+Control Deck: original artwork generated from geometric primitives and original letter grids.
+Asset source: Scripts/generate-release-artwork.py
+Generated artwork: CC0-1.0 to the extent copyright applies.
+No Atomic/Delta artwork or third-party fonts are included.

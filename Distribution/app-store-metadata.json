@@ -1,0 +1,49 @@
+{
+  "status": "Build 115 3DS launch fix confirmed on iPhone 17; preparing source-built release candidate.",
+  "distribution_scope": "TestFlight testing only; no App Store release submission",
+  "app_store_connect_id": null,
+  "app_store_connect_url": null,
+  "name": "Claw Emulator: 3DS GBA NES GBC",
+  "display_name": "Claw",
+  "subtitle": "Your dual-screen game library",
+  "primary_language": "en-US",
+  "bundle_id": "com.example.claw",
+  "team_id": null,
+  "sku": "claw-ios",
+  "version": "1.0.0",
+  "build": "103",
+  "platform": "iOS",
+  "minimum_os": "17.0",
+  "devices": "iPhone",
+  "suggested_primary_category": "Games",
+  "keywords": "emulator,dual screen,game library,controller,touch,save states",
+  "promotional_text": "Bring compatible games you have the right to use into one iPhone library, with touch controls, game-controller support, and local saves.",
+  "description": "Claw brings compatible 3DS, DS, Game Boy Advance, Game Boy, Game Boy Color, and NES games into one iPhone library.\n\nImport supported game files from Files, including a .7z or .zip archive containing one game. Decrypted 3DS game files and supported .cia packages can be imported. Organize your library, adjust controls and screen layout, and play with touch controls or a compatible game controller. Save in the game or use save states where available. Export saves through the iOS share sheet.\n\nNo games or console files are included. Import only files you have the right to use. Some 3DS games require separately supplied console data. Compatibility and speed vary by game and device; full-speed gameplay is not guaranteed.\n\nClaw is an independent project and is not affiliated with or endorsed by any console maker or game publisher.",
+  "support_url": "https://claw-emulator.sunsetpine6.chatgpt.site/support/",
+  "support_email": "feedback@salamlabs.io",
+  "privacy_policy_url": "https://claw-emulator.sunsetpine6.chatgpt.site/privacy/",
+  "source_repository": "https://github.com/floaterrrrrr/Claw-Emulator",
+  "privacy_answer_draft": "No developer telemetry, advertising, analytics SDKs, account service, remote cover downloads or game uploads. Local-only files and diagnostics; optional support email, iOS backup/sharing, camera/microphone input and imported-software networking are explained in the policy. Account owner must confirm final-binary behavior and optional-disclosure criteria for support practices before submitting privacy answers. See listing-handoff.md.",
+  "release_method": "manual",
+  "review_login_required": false,
+  "review_contact": {
+    "email": "feedback@salamlabs.io",
+    "status": "Account holder name and phone saved in App Store Connect with owner approval; private details are not stored in this repository",
+    "first_name": null,
+    "last_name": null,
+    "phone": null
+  },
+  "review_notes_draft": "Claw emulates 3DS, DS, GBA, GB, GBC, and NES games without CPU or shader JIT. No account or login is required. Import a supported game from Files in the library; one-game .7z/.zip archives are accepted. Privacy policy, source notices, and console-key import are in Settings. Save in the game's own menu before stopping; save states are available in the in-game menu. No commercial games or console keys are bundled. Before submission, attach a lawfully redistributable compatible test game and its license, exact import/test steps, supported-device results, and any necessary console data you have permission to supply. Do not submit this draft without completing that test package.",
+  "screenshots": {
+    "status": "not captured; use the real release app",
+    "suggested_scenes": [
+      "Library with only content you have permission to show",
+      "Portrait gameplay with a licensed test game",
+      "Landscape gameplay with a licensed test game",
+      "Game menu and display controls",
+      "Settings and local save export"
+    ]
+  },
+  "last_observed_testflight_build": "115",
+  "last_observed_source_commit": "b702d36d69fb54d409f4a463631344561ad5f5b6"
+}

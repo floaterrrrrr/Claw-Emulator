@@ -1,0 +1,4 @@
+// Public defaults. Local preparation or Xcode Cloud writes the optional override.
+CLAW_APPLE_TEAM_ID =
+CLAW_BUNDLE_ID = com.example.claw
+#include? "../.build-config/Signing.xcconfig"

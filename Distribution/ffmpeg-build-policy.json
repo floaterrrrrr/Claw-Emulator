@@ -1,0 +1,7 @@
+{
+  "mode": "source",
+  "reason": "Release candidate uses the pinned source-built FFmpeg with the Build 115-confirmed ICL crash fix.",
+  "legacy_revision": "14b50a2a939c65113b7196d1755f2399977248fd",
+  "release_candidate": true,
+  "source_override": "Source is the release default. legacy-diagnostic is reserved for an explicitly requested diagnostic build."
+}

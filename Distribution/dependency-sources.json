@@ -1,0 +1,51 @@
+{
+  "enet": {
+    "repository": "lsalzman/enet",
+    "revision": "2662c0de09e36f2a2030ccc2c528a3e4c9e8138a",
+    "ref": "v1.3.18",
+    "url": "https://codeload.github.com/lsalzman/enet/tar.gz/2662c0de09e36f2a2030ccc2c528a3e4c9e8138a",
+    "sha256": "37381831c5ccbb41c3c71e867203fee847670f67717f297f930290d18985ad5f"
+  },
+  "faad2": {
+    "repository": "knik0/faad2",
+    "revision": "673a22a3c7c33e96e2ff7aae7c4d2bc190dfbf92",
+    "ref": "2.11.2",
+    "url": "https://codeload.github.com/knik0/faad2/tar.gz/673a22a3c7c33e96e2ff7aae7c4d2bc190dfbf92",
+    "sha256": "98725cefc915771f00ffd0286901c865e7d3fd0e5ff6b98d004d6f48904776f9"
+  },
+  "fmt": {
+    "repository": "fmtlib/fmt",
+    "revision": "407c905e45ad75fc29bf0f9bb7c5c2fd3475976f",
+    "ref": "12.1.0",
+    "url": "https://codeload.github.com/fmtlib/fmt/tar.gz/407c905e45ad75fc29bf0f9bb7c5c2fd3475976f",
+    "sha256": "2bc1fe4a5b6d5d6a614239b4ca1d520e66e152a02d3d262684d26dfd6ab3438a"
+  },
+  "glslang": {
+    "repository": "KhronosGroup/glslang",
+    "revision": "f0bd0257c308b9a26562c1a30c4748a0219cc951",
+    "ref": "16.2.0",
+    "url": "https://codeload.github.com/KhronosGroup/glslang/tar.gz/f0bd0257c308b9a26562c1a30c4748a0219cc951",
+    "sha256": "bd58dca4dac67dcf7640292d7d63e0416274d40ee2200f7301878cec11ac6647"
+  },
+  "sirit": {
+    "repository": "azahar-emu/sirit",
+    "revision": "274f4e1648b484ac260055022a4cf7b6eef64284",
+    "ref": "master",
+    "url": "https://codeload.github.com/azahar-emu/sirit/tar.gz/274f4e1648b484ac260055022a4cf7b6eef64284",
+    "sha256": "a1c995119c4721744ebf57ed836c97528c1626fc703967168fb210208822fc83"
+  },
+  "teakra": {
+    "repository": "wwylele/teakra",
+    "revision": "3d697a18df504f4677b65129d9ab14c7c597e3eb",
+    "ref": "master",
+    "url": "https://codeload.github.com/wwylele/teakra/tar.gz/3d697a18df504f4677b65129d9ab14c7c597e3eb",
+    "sha256": "693fdd6db1d64258fdcda2e1ac782eb97ae993863d72c0a174636bc7ee80b75c"
+  },
+  "spirv-headers": {
+    "repository": "KhronosGroup/SPIRV-Headers",
+    "revision": "aa6cef192b8e693916eb713e7a9ccadf06062ceb",
+    "ref": "sirit submodule",
+    "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/aa6cef192b8e693916eb713e7a9ccadf06062ceb",
+    "sha256": "1bf0568bad1f9e30fce8d3199e54ae7ade1c16dbe913b5afd9b499149a9bb9a5"
+  }
+}
