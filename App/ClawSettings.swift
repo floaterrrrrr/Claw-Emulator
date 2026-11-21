@@ -69,6 +69,7 @@ private struct DeviceProfileSummary: Sendable {
 }
 
 struct ClawSettings: View {
+    @AppStorage("proportionalBottomScreen") private var proportionalBottomScreen = false
     var games: [Game] = []
     let exporting: Bool
     let onImportKeys: () -> Void
@@ -243,6 +244,10 @@ struct ClawSettings: View {
                 }
             }
             ClawSettingsSection(title: "Skin & layout") {
+                Toggle("Proportional Bottom Screen", isOn: $proportionalBottomScreen)
+                Text("3DS only. Matches the displays’ pixel scale without cropping; may reduce the main display to fit your layout.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Divider()
                 NavigationLink { SkinSettingsView(games: games, showsBack: true) } label: {
                     ClawSettingsRow(title: "Choose a skin", symbol: "rectangle.on.rectangle", subtitle: "Browse or import your own")
                 }

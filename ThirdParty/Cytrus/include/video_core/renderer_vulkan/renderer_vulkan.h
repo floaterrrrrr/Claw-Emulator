@@ -87,6 +87,8 @@ public:
 
     void NotifySurfaceChanged(bool second) override;
     void InvalidatePresentationCache() override;
+    void PrepareStateRestore() override;
+    std::vector<u8> CaptureDisplayPreview(u32 width, u32 height) override;
 
     void SwapBuffers() override;
     std::vector<u8> CaptureSavePreview() override;

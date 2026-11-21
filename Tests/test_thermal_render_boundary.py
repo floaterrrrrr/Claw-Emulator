@@ -17,6 +17,7 @@ implementation = source[start:end] + '        return frame;\n    }\n    return n
 setup = r'''
 #include "MobileThermal.hpp"
 #include "SpatialUpscaleConfig.hpp"
+#include "RestorePresentation.hpp"
 #include <cassert>
 #include <string>
 #define CLAW_ENABLE_METALFX 1
@@ -81,6 +82,11 @@ int main() {
     assert(renderer.PrepareWindowFrame(window,out,false) == nullptr);
     renderer.frame_source_changed = true;
     assert(renderer.PrepareWindowFrame(window,out,false) == &window.frame);
+    renderer.frame_source_changed = false;
+    restore_presentation.Begin(); restore_presentation.Warmed();
+    assert(renderer.PrepareWindowFrame(window,out,false) == &window.frame);
+    for (int i=0; i<5; ++i) restore_presentation.Completed(restore_presentation.Generation());
+    assert(renderer.PrepareWindowFrame(window,out,false) == nullptr);
 }
 '''
 with tempfile.TemporaryDirectory(prefix='claw-thermal-boundary-') as temp:

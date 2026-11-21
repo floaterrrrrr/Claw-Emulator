@@ -66,6 +66,8 @@ void Claw3DSSetSpeed(int value) { speed = value; Record("speed"); }
 void Claw3DSSetVolume(float value) { volume = value; Record("volume"); }
 void Claw3DSMemoryPressure() {}
 uint64_t Claw3DSCurrentTitle() { return selectedTitle.load(); }
+bool Claw3DSRestoreDisplayReady() { return running.load() && !paused.load(); }
+int Claw3DSCopySavePreview(uint64_t, int, void*, int, int*, int*) { return 0; }
 int Claw3DSDefaultResolution() { return [NSProcessInfo.processInfo.arguments containsObject:@"--fixture-a19"] ? 4 : 2; }
 int Claw3DSDefaultMetalFXInput() { return Claw3DSDefaultResolution() == 4 ? 2 : 0; }
 bool Claw3DSSaveState(int slot) {

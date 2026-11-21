@@ -55,6 +55,7 @@ targets:
         buildPhase: resources
       - path: ../../App/GameUtilitiesOverlay.swift
       - path: ../../App/LegalDocumentView.swift
+      - path: ../../App/LegalDocument.swift
       - path: ../../App/Legal
         buildPhase: resources
       - path: ../../App/SaveStateStore.swift

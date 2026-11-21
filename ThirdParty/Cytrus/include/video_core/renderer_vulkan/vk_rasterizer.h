@@ -49,6 +49,7 @@ public:
     ~RasterizerVulkan() override;
 
     void TickFrame();
+    void WaitShaderResources() { pipeline_cache.WaitShaderResources(); }
     void LoadDefaultDiskResources(const std::atomic_bool& stop_loading,
                                   const VideoCore::DiskResourceLoadCallback& callback) override;
 

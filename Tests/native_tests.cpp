@@ -24,6 +24,16 @@ int main() {
     assert(point.x == 0 && point.y == 239);
     point = Claw3DSMapTouch(0, 0, 0, 200, 320, 240);
     assert(point.x == -1 && point.y == -1);
+
+    // Proportional layout changes the view's size/origin, not native input
+    // coordinates. MetalScreen first converts the touch into this view space.
+    for (float width : {132.f, 180.f, 256.f, 320.f}) {
+        const float height = width * 0.75f;
+        auto center = Claw3DSMapTouch(width / 2, height / 2, width, height, 1280, 960);
+        assert(std::abs(center.x - 639.5f) < 0.001f && std::abs(center.y - 479.5f) < 0.001f);
+        auto edge = Claw3DSMapTouch(width, height, width, height, 1280, 960);
+        assert(edge.x == 1279 && edge.y == 959);
+    }
     point = Claw3DSMapTouch(std::numeric_limits<float>::quiet_NaN(), 0, 300, 200, 320, 240);
     assert(point.x == -1 && point.y == -1);
 

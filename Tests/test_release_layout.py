@@ -2,6 +2,7 @@
 """Validate the canonical Claw project, bridge and public source layout."""
 import importlib.util
 import json
+import plistlib
 from pathlib import Path
 import re
 import sys
@@ -16,6 +17,16 @@ spec.loader.exec_module(exporter)
 
 
 class ReleaseLayoutTests(unittest.TestCase):
+    def test_phase_one_resources_and_entitlements(self):
+        entitlement = plistlib.loads((ROOT / 'App/Claw.entitlements').read_bytes())
+        self.assertIs(entitlement.get('com.apple.developer.kernel.increased-memory-limit'), True)
+        project = (ROOT / 'Claw.xcodeproj/project.pbxproj').read_text(encoding='utf-8')
+        self.assertEqual(project.count('CODE_SIGN_ENTITLEMENTS = App/Claw.entitlements;'), 2)
+        self.assertIn('LegalDocument.swift in Sources', project)
+        self.assertIn('RetroCoreLicenses.txt', project)
+        manifest = (ROOT / 'Tests/FrontendHarness/project.yml').read_text()
+        self.assertIn('../../App/LegalDocument.swift', manifest)
+
     def test_canonical_project_and_scheme_build_claw(self):
         project = (ROOT / 'Claw.xcodeproj/project.pbxproj').read_text(encoding='utf-8')
         scheme = ET.parse(ROOT / 'Claw.xcodeproj/xcshareddata/xcschemes/Claw.xcscheme')

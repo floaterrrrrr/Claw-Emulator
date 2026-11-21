@@ -88,6 +88,8 @@ if args.verify_signature:
     subprocess.run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)], check=True)
     entitlements = subprocess.check_output(["codesign", "-d", "--entitlements", ":-", str(app)])
     policy = plistlib.loads(entitlements)
+    if policy.get("com.apple.developer.kernel.increased-memory-limit") is not True:
+        raise SystemExit("Distribution archive is missing the increased-memory-limit entitlement")
     if policy.get("get-task-allow") is not False:
         raise SystemExit("Distribution archive must disable debugger access")
     for entitlement in ["com.apple.security.cs.allow-jit", "dynamic-codesigning", "com.apple.private.cs.debugger"]:

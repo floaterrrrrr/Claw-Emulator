@@ -85,6 +85,9 @@ public:
     }
     bool Encode(u64 render_tick) override {
         if (config->failed.load()) return false;
+        // A transient size change uses the Vulkan blit. No MetalFX command or
+        // completion semaphore is submitted, and the healthy scaler is kept.
+        if (!textures.Matches(queue, input_texture, output_texture)) return false;
         const u64 next = value + 1;
         const auto token = config;
         id<MTLSharedEvent> completion_event = finished;

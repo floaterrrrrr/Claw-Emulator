@@ -62,12 +62,31 @@ actor SaveStateStore {
     }
     func preview(title: UInt64, entry: SaveEntry) throws -> URL? {
         let state = file(title, entry.slot)
-        let url = URL(fileURLWithPath: state.path + ".png")
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let stateDate = try FileManager.default.attributesOfItem(atPath: state.path)[.modificationDate] as? Date
-        let pictureDate = try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date
-        guard let stateDate, let pictureDate, pictureDate >= stateDate else { return nil }
-        return url
+        for suffix in [".hires.png", ".png"] {
+            let url = URL(fileURLWithPath: state.path + suffix)
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                  let stateDate, let pictureDate = attributes[.modificationDate] as? Date,
+                  pictureDate >= stateDate else { continue }
+            return url
+        }
+        return nil
+    }
+    // The app owns this optional sidecar. No byte of the native CST archive or
+    // its version/header changes, and v1.0.0 low-resolution previews still work.
+    func storePreview(_ png: Data, title: UInt64, slot: Int, savedAt: Date) throws {
+        guard (1...11).contains(slot), png.count >= 24, png.count <= 8 * 1024 * 1024,
+              Array(png.prefix(8)) == [137,80,78,71,13,10,26,10],
+              Array(png[12..<16]) == [73,72,68,82] else { throw CocoaError(.fileReadCorruptFile) }
+        func word(_ start: Int) -> UInt32 {
+            png[start..<start+4].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+        }
+        let width = word(16), height = word(20)
+        guard (400...1600).contains(width), height > 0, height <= 960, width * 3 == height * 5,
+              try list(title: title).contains(where: { $0.slot == slot && $0.date == savedAt }) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        try png.write(to: URL(fileURLWithPath: file(title, slot).path + ".hires.png"), options: .atomic)
     }
     func autosaveSlot(title: UInt64) throws -> Int {
         let entries = try list(title: title)
@@ -162,6 +181,7 @@ actor SaveStateStore {
         guard (1...11).contains(slot) else { throw CocoaError(.fileWriteInvalidFileName) }
         try FileManager.default.removeItem(at: file(title, slot))
         try? FileManager.default.removeItem(atPath: file(title, slot).path + ".png")
+        try? FileManager.default.removeItem(atPath: file(title, slot).path + ".hires.png")
         let entries = try list(title: title)
         try JSONEncoder().encode(entries).write(to: metadata(title), options: .atomic)
         return entries

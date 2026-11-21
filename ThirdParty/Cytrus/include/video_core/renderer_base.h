@@ -65,6 +65,9 @@ public:
     // if second == true then it is the second screen
     virtual void NotifySurfaceChanged(bool second) {}
     virtual void InvalidatePresentationCache() {}
+    // Transition-only drain; never used by the ordinary presentation loop.
+    virtual void PrepareStateRestore() {}
+    virtual std::vector<u8> CaptureDisplayPreview(u32, u32) { return {}; }
 
     /// Returns the resolution scale factor relative to the native 3DS screen resolution
     u32 GetResolutionScaleFactor();

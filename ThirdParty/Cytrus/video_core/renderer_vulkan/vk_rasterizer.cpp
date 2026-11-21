@@ -163,6 +163,7 @@ void RasterizerVulkan::LoadDefaultDiskResources(
     pipeline_cache.SetProgramID(program_id);
     pipeline_cache.SetAccurateMul(accurate_mul);
     pipeline_cache.LoadCache(stop_loading, callback);
+    pipeline_cache.WaitShaderResources();
 
     if (callback) {
         callback(VideoCore::LoadCallbackStage::Complete, 0, 0, "");

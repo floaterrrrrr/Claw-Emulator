@@ -5,6 +5,8 @@
 #include "core/core.h"
 #include "core/savestate.h"
 #include "core/hle/kernel/kernel.h"
+#include "video_core/gpu.h"
+#include "video_core/renderer_base.h"
 
 namespace Claw {
 void SessionControls::process(Core::System& system, bool paused) {
@@ -32,6 +34,7 @@ void SessionControls::process(Core::System& system, bool paused) {
             if (system.Kernel().AreAsyncOperationsPending()) {
                 if (paused || std::chrono::steady_clock::now() >= deadline_) {
                     operation_.reset(); processing_.reset();
+                    if (restoreWarmed) restoreWarmed();
                     states.complete(StateStatus::Failed, "Pending game operations prevented a safe snapshot. Resume and retry.");
                 }
                 return;
@@ -43,6 +46,7 @@ void SessionControls::process(Core::System& system, bool paused) {
         if (operation_->current() != AsyncStateOperation::Phase::Done) return;
         const auto error = operation_->failure();
         const bool failed_restore = processing_->restore && !error.empty() && operation_->boundaryStarted();
+        if (processing_->restore && !error.empty() && !failed_restore && restoreWarmed) restoreWarmed();
         states.complete(error.empty() ? (processing_->restore ? StateStatus::Restored : StateStatus::Saved)
                                       : StateStatus::Failed, error);
         operation_.reset(); processing_.reset();
@@ -68,17 +72,33 @@ void SessionControls::process(Core::System& system, bool paused) {
         return;
     }
     const auto request = *processing_;
+    if (request.restore && restoreStarted) restoreStarted();
     const auto path = system.StatePath(request.slot);
     const auto title = system.StateTitle();
     struct Payload { Core::StateSnapshot snapshot; std::string restored; };
     auto payload = std::make_shared<Payload>();
     operation_ = std::make_unique<AsyncStateOperation>(
-        [payload, request, path, title] {
-            if (request.restore) payload->restored = Core::ReadStateSnapshot(path, title);
+        [this, payload, request, path, title] {
+            if (request.restore) {
+                if (restoreBudget && !restoreBudget(path))
+                    throw std::runtime_error("Not enough memory to restore safely. Start from boot or close other apps and retry. Your save is kept.");
+                payload->restored = Core::ReadStateSnapshot(path, title);
+            }
         },
-        [payload, request, &system] {
-            if (request.restore) system.ApplyStateSnapshot(std::move(payload->restored));
-            else payload->snapshot = system.CaptureStateSnapshot();
+        [this, payload, request, &system] {
+            if (request.restore) {
+                system.GPU().Renderer().PrepareStateRestore();
+                system.ApplyStateSnapshot(std::move(payload->restored));
+                // ApplyStateSnapshot can replace the entire GPU/renderer. Never
+                // carry a pointer from before deserialization into this phase.
+                auto& renderer = system.GPU().Renderer();
+                renderer.Rasterizer()->LoadDefaultDiskResources(false, nullptr);
+                renderer.InvalidatePresentationCache();
+                if (restoreWarmed) restoreWarmed();
+            } else {
+                if (capturePreview) capturePreview(system, request.slot);
+                payload->snapshot = system.CaptureStateSnapshot();
+            }
         },
         [payload, request, path] {
             if (!request.restore) Core::WriteStateSnapshot(std::move(payload->snapshot), path);

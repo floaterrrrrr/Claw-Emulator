@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F10100000000000000000001 /* LegalDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10100000000000000000002 /* LegalDocument.swift */; };
 		FB1B48B74CD999128503C64F /* ROMArchiveImport.c in Sources */ = {isa = PBXBuildFile; fileRef = BA75B0F0B0AB5D390B627422 /* ROMArchiveImport.c */; };
 		D9565C7AE554AE26463EB600 /* 7zAlloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 13AF99D33C034558416ADE75 /* 7zAlloc.c */; settings = {COMPILER_FLAGS = "-DZ7_PPMD_SUPPORT -DZ7_EXTRACT_ONLY"; }; };
 		CD0F22AA936F7E0F70C233CF /* 7zArcIn.c in Sources */ = {isa = PBXBuildFile; fileRef = B563CFA397D5DBF10ECA3F4B /* 7zArcIn.c */; settings = {COMPILER_FLAGS = "-DZ7_PPMD_SUPPORT -DZ7_EXTRACT_ONLY"; }; };
@@ -560,6 +561,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F10100000000000000000002 /* LegalDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalDocument.swift; sourceTree = "<group>"; };
 		BA75B0F0B0AB5D390B627422 /* ROMArchiveImport.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ROMArchiveImport.c; sourceTree = "<group>"; };
 		13AF99D33C034558416ADE75 /* 7zAlloc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = 7zAlloc.c; sourceTree = "<group>"; };
 		B563CFA397D5DBF10ECA3F4B /* 7zArcIn.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = 7zArcIn.c; sourceTree = "<group>"; };
@@ -1855,6 +1857,7 @@
 				C1A0C0100000000000000001 /* AppIconPolicy.swift */,
 				C1A0C0100000000000000002 /* AppIconSettings.swift */,
 				F52C3A388A1B3460B56F8985 /* LegalDocumentView.swift */,
+				F10100000000000000000002 /* LegalDocument.swift */,
 				E5E06DF78B7E871E570EE01F /* Library.swift */,
 				2D599AEDEF45F7C1675F2081 /* OrientationPolicy.swift */,
 				D723C5331466537531567890 /* PrivacyInfo.xcprivacy */,
@@ -2904,6 +2907,7 @@
 				C1A0C0100000000000000011 /* AppIconPolicy.swift in Sources */,
 				C1A0C0100000000000000012 /* AppIconSettings.swift in Sources */,
 				5087B217A49B58F4BAAE6113 /* LegalDocumentView.swift in Sources */,
+				F10100000000000000000001 /* LegalDocument.swift in Sources */,
 				F831E793CA4B8890661C89CE /* Library.swift in Sources */,
 				81C70AAA8AB011574BD51740 /* OrientationPolicy.swift in Sources */,
 			);
@@ -3101,6 +3105,7 @@
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconOrange AppIconBlue AppIconGreen AppIconRed";
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGN_ENTITLEMENTS = App/Claw.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(CLAW_APPLE_TEAM_ID)";
@@ -3208,6 +3213,7 @@
 				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconOrange AppIconBlue AppIconGreen AppIconRed";
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGN_ENTITLEMENTS = App/Claw.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "$(CLAW_APPLE_TEAM_ID)";

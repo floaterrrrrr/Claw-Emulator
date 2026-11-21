@@ -43,6 +43,10 @@ int Claw3DSDefaultResolution(void);
 int Claw3DSDefaultMetalFXInput(void);
 bool Claw3DSSaveState(int slot);
 bool Claw3DSLoadState(int slot);
+bool Claw3DSRestoreDisplayReady(void);
+// Optional RGBA preview of the last captured save. Call with NULL to query
+// size, then copy on the frontend worker. No pointer into core memory escapes.
+int Claw3DSCopySavePreview(uint64_t title, int slot, void* bytes, int capacity, int* width, int* height);
 // 0 idle, 1 pending, 2 saved, 3 restored, -1 failed.
 int Claw3DSStateStatus(void);
 const char* Claw3DSStateError(void);

@@ -44,6 +44,7 @@ export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
 task_ci_clang="$(xcrun --sdk macosx --find clang++)"
 printf '#include <array>\nint main() { return std::array<int, 1>{}[0]; }\n' | \
     "$task_ci_clang" -std=c++20 -x c++ -fsyntax-only -
+CXX="$task_ci_clang" run_step "Restore presentation and license reader tests" bash Scripts/test-phase-one.sh
 CXX="$task_ci_clang" run_step "Fast-forward core tests" python3 Tests/test_fast_forward_core.py
 CXX="$task_ci_clang" run_step "Session save and restore tests" python3 Tests/test_session_controls.py
 CXX="$task_ci_clang" run_step "Critical core diagnostic tests" python3 Tests/test_core_failure_diagnostic.py

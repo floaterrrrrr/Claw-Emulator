@@ -16,6 +16,21 @@ struct GameplayLayout: Equatable {
     let landscape: Bool
     let top, bottom, circle, dpad, face, leftShoulder, rightShoulder, select, start, hud, gear: CGRect
 
+    func proportionalScreens(enabled: Bool) -> GameplayLayout {
+        guard enabled, top.width > 0, bottom.width > 0, top.height > 0, bottom.height > 0 else { return self }
+        // Fit a common pixels-to-points scale into the authored screen slots.
+        // Both displays retain their full 400x240 / 320x240 image; controls
+        // never move into a display and a narrow landscape slot cannot crop it.
+        let scale = min(top.width / 400, top.height / 240, bottom.width / 320, bottom.height / 240)
+        let main = CGRect(x: top.midX - 200 * scale, y: top.midY - 120 * scale,
+                          width: 400 * scale, height: 240 * scale)
+        let touch = CGRect(x: bottom.midX - 160 * scale, y: bottom.midY - 120 * scale,
+                           width: 320 * scale, height: 240 * scale)
+        return GameplayLayout(landscape: landscape, top: main, bottom: touch,
+            circle: circle, dpad: dpad, face: face, leftShoulder: leftShoulder, rightShoulder: rightShoulder,
+            select: select, start: start, hud: hud, gear: gear)
+    }
+
     static func make(in safe: CGRect, largerTouchScreen: Bool = false,
                      mainAspect: CGFloat = 5 / 3, hasSecondScreen: Bool = true) -> GameplayLayout {
         let landscape = safe.width > safe.height

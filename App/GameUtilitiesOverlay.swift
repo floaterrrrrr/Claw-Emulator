@@ -20,6 +20,7 @@ import SwiftUI
     @Published var orientation: GameplayOrientation
     @Published var showStats: Bool
     @Published var largerTouchScreen: Bool
+    @Published var proportionalBottomScreen: Bool
     @Published var skinEnabled: Bool
 
     init(defaults: UserDefaults = .standard) {
@@ -32,6 +33,7 @@ import SwiftUI
         orientation = GameplayOrientation(rawValue: defaults.string(forKey: "gameOrientation") ?? "") ?? .automatic
         showStats = defaults.object(forKey: "showGameStats") as? Bool ?? true
         largerTouchScreen = defaults.bool(forKey: "largerTouchScreen")
+        proportionalBottomScreen = defaults.bool(forKey: "proportionalBottomScreen")
         autosaveEnabled = defaults.object(forKey: "autosaveEnabled") as? Bool ?? true
         autosaveMinutes = min(10, max(1, defaults.object(forKey: "autosaveMinutes") as? Int ?? 5))
 #if CLAW_FRONTEND_FIXTURE
@@ -91,6 +93,7 @@ import SwiftUI
             .onChange(of: model.opacity) { _, _ in onLayout() }
             .onChange(of: model.showStats) { _, _ in onLayout() }
             .onChange(of: model.largerTouchScreen) { _, _ in onLayout() }
+            .onChange(of: model.proportionalBottomScreen) { _, _ in onLayout() }
             .onChange(of: model.skinEnabled) { _, _ in onLayout() }
             .onChange(of: model.autosaveEnabled) { _, _ in onLayout() }
             .onChange(of: model.autosaveMinutes) { _, _ in onLayout() }
@@ -181,6 +184,13 @@ import SwiftUI
                     Divider()
                     Toggle("Larger touch screen", isOn: $model.largerTouchScreen)
                     Text("Uses more space in landscape.").font(.caption).foregroundStyle(.secondary)
+                }
+                if model.system == .threeDS {
+                    Divider()
+                    Toggle("Proportional Bottom Screen", isOn: $model.proportionalBottomScreen)
+                        .accessibilityIdentifier("proportionalBottomScreen")
+                    Text("Matches both displays’ pixel scale within the available space. The touch screen uses bilinear filtering.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
             ClawSettingsSection(title: "Control appearance", footer: "Choose or import skins from the Skins tab in your library.") {

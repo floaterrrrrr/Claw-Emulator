@@ -24,6 +24,7 @@ bash Scripts/test-imported-skins.sh
 bash Scripts/test-mobile-presentation.sh
 bash Scripts/test-mobile-device-profile.sh
 bash Scripts/test-advanced-states.sh
+bash Scripts/test-phase-one.sh
 python3 Tests/test_session_controls.py
 python3 Tests/test_core_failure_diagnostic.py
 python3 Tests/test_ffmpeg_loader.py

@@ -18,6 +18,13 @@ import Foundation
                 precondition(hit.width >= 44 && hit.height >= 44 && safe.contains(hit))
             }
             let game = layout.gameplay
+            let proportional = layout.proportionalScreens(enabled: true)
+            precondition(proportional.hitFrames == layout.hitFrames)
+            precondition(abs(proportional.gameplay.top.width / 400 - proportional.gameplay.bottom.width / 320) < 0.001)
+            for (slot, display) in [(game.top, proportional.gameplay.top), (game.bottom, proportional.gameplay.bottom)] {
+                precondition(display.minX >= slot.minX - 0.001 && display.maxX <= slot.maxX + 0.001 &&
+                             display.minY >= slot.minY - 0.001 && display.maxY <= slot.maxY + 0.001)
+            }
             precondition(abs(game.top.width / game.top.height - 5.0 / 3) < 0.001)
             precondition(abs(game.bottom.width / game.bottom.height - 4.0 / 3) < 0.001)
             precondition(game.top.maxX < game.bottom.minX)

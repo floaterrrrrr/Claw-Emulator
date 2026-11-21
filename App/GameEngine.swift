@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 
 // Routes frontend commands only. The 3DS guest clock, Vulkan renderer and audio
 // workers keep their existing implementation and never enter a libretro core.
@@ -45,6 +48,31 @@ struct GameEngine: Sendable {
     func restore(_ slot: Int32) -> Bool { is3DS ? Claw3DSLoadState(slot) : ClawRetroState(slot, true) }
     func stateStatus() -> Int32 { is3DS ? Claw3DSStateStatus() : ClawRetroStateStatus() }
     func stateError() -> UnsafePointer<CChar> { is3DS ? Claw3DSStateError() : ClawRetroError() }
+    func restoreDisplayReady() -> Bool { !is3DS || Claw3DSRestoreDisplayReady() }
+    // Invoked on the frontend's worker after a successful save, not the UI or
+    // emulation worker. PNG encoding is optional and never changes the CST.
+    func savePreview(title: UInt64, slot: Int) -> Data? {
+        guard is3DS else { return nil }
+        var width: Int32 = 0, height: Int32 = 0
+        let count = Claw3DSCopySavePreview(title, Int32(slot), nil, 0, &width, &height)
+        guard count > 0, count <= 1600 * 960 * 4, width > 0, width <= 1600, height > 0, height <= 960,
+              count == width * height * 4 else { return nil }
+        var rgba = Data(count: Int(count))
+        let copied = rgba.withUnsafeMutableBytes { bytes in
+            Claw3DSCopySavePreview(title, Int32(slot), bytes.baseAddress, count, &width, &height)
+        }
+        guard copied == count, let provider = CGDataProvider(data: rgba as CFData),
+              let image = CGImage(width: Int(width), height: Int(height), bitsPerComponent: 8,
+                bitsPerPixel: 32, bytesPerRow: Int(width) * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue), provider: provider,
+                decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
+        guard let bytes = CFDataCreateMutable(nil, 0),
+              let output = CGImageDestinationCreateWithData(bytes, UTType.png.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(output, image, nil)
+        guard CGImageDestinationFinalize(output) else { return nil }
+        guard let pointer = CFDataGetBytePtr(bytes) else { return nil }
+        return Data(bytes: pointer, count: CFDataGetLength(bytes))
+    }
     func lastError() -> UnsafePointer<CChar> { is3DS ? Claw3DSLastError() : ClawRetroError() }
     func isRunning() -> Bool { is3DS ? Claw3DSIsRunning() : ClawRetroIsRunning() }
     func currentTitle() -> UInt64 { is3DS ? Claw3DSCurrentTitle() : game.titleID ?? game.platform.saveIdentity(for: game.id) }

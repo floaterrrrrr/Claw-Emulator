@@ -41,6 +41,8 @@ int main() {
             strides[slot] = (descriptor.width * 4 + 255) & ~NSUInteger(255);
             readback[slot] = [device newBufferWithLength:strides[slot] * 960 options:MTLResourceStorageModeShared];
             assert(staging[slot] && input[slot] && output[slot] && done[slot] && readback[slot]);
+            assert(scalers[slot].Matches(scaler_queue, input[slot], output[slot]));
+            assert(!scalers[slot].Matches(scaler_queue, output[slot], output[slot]));
             assert(!scalers[slot].Encode(scaler_queue, input[slot], output[slot], rendered, 0, done[slot], 1, nil));
         }
         for (uint64_t cycle = 1; cycle <= 3; ++cycle) {

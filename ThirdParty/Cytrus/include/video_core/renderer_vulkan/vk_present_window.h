@@ -37,6 +37,7 @@ struct Frame {
     vk::Fence present_done;
     vk::CommandBuffer cmdbuf;
     bool thermal_limited{};
+    u64 presentation_generation{};
 #if CLAW_ENABLE_METALFX
     std::unique_ptr<Claw::MetalFXFrame> metalfx;
     u64 render_tick{};
@@ -94,6 +95,7 @@ private:
     const Instance& instance;
     Scheduler& scheduler;
     bool low_refresh_rate;
+    bool bottom_only;
     vk::SurfaceKHR surface;
     vk::SurfaceKHR next_surface{};
     Swapchain swapchain;

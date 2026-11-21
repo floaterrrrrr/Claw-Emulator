@@ -14,6 +14,7 @@ id<MTLFXSpatialScaler> MakeSpatialScaler(id<MTLDevice> device, MTLPixelFormat fo
 class SpatialTextures {
 public:
     bool Initialize(id<MTLDevice> device, MTLPixelFormat format, SpatialExtent extent);
+    bool Matches(id<MTLCommandQueue> queue, id<MTLTexture> source, id<MTLTexture> destination) const;
     // Blit logical content into owned, tracked scratch textures. MetalFX never
     // sees MoltenVK heap views or treats the padding as screen content.
     bool Encode(id<MTLCommandQueue> queue, id<MTLTexture> source, id<MTLTexture> destination,

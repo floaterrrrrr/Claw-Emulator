@@ -198,6 +198,7 @@ targets:
       - path: App
         excludes:
           - Info.plist
+          - Claw.entitlements
           - ControllerSkin
       - path: App/ControllerSkin
         type: folder
@@ -210,6 +211,7 @@ targets:
         DEVELOPMENT_TEAM: "$(CLAW_APPLE_TEAM_ID)"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGNING_ALLOWED: YES
+        CODE_SIGN_ENTITLEMENTS: App/Claw.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIconOrange AppIconBlue AppIconGreen AppIconRed"
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES

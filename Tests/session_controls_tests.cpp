@@ -17,6 +17,21 @@ namespace Core {
 struct StateSnapshot { std::string bytes; };
 inline std::atomic<int> reads{}, writes{};
 inline bool fail_read{};
+inline std::string restore_trace;
+struct FakeRasterizer {
+    void LoadDefaultDiskResources(bool, std::nullptr_t) { restore_trace += 'L'; }
+};
+struct FakeRenderer {
+    FakeRasterizer rasterizer;
+    bool prepared{};
+    void PrepareStateRestore() { prepared = true; restore_trace += 'D'; }
+    FakeRasterizer* Rasterizer() { return &rasterizer; }
+    void InvalidatePresentationCache() { restore_trace += 'I'; }
+};
+struct FakeGPU {
+    std::unique_ptr<FakeRenderer> renderer = std::make_unique<FakeRenderer>();
+    FakeRenderer& Renderer() { return *renderer; }
+};
 std::string ReadStateSnapshot(const std::string& path, unsigned long long title) {
     assert(path == "slot-1" && title == 42);
     ++reads;
@@ -35,6 +50,8 @@ class System {
 public:
     bool powered{true}, fail_apply{};
     std::atomic<int> captures{}, applies{};
+    FakeGPU gpu;
+    FakeGPU& GPU() { return gpu; }
     auto& Kernel() { return kernel; }
     bool IsPoweredOn() const { return powered; }
     std::string StatePath(unsigned slot) const { assert(slot == 1); return "slot-1"; }
@@ -46,6 +63,9 @@ public:
     }
     void ApplyStateSnapshot(std::string bytes) {
         assert(!kernel.pending && bytes == "restored");
+        assert(gpu.Renderer().prepared);
+        restore_trace += 'A';
+        gpu.renderer = std::make_unique<FakeRenderer>();
         ++applies;
         if (fail_apply) throw std::runtime_error("apply failed");
     }
@@ -71,8 +91,11 @@ int main() {
         finish(controls, core, paused);
         assert(controls.states.status() == StateStatus::Saved);
         assert(controls.states.request(true, 1));
+        Core::restore_trace.clear();
+        controls.restoreWarmed = [] { Core::restore_trace += 'W'; };
         finish(controls, core, paused);
         assert(controls.states.status() == StateStatus::Restored);
+        assert(Core::restore_trace == "DALIW");
     }
     assert(core.captures == 2 && core.applies == 2 && Core::reads == 2 && Core::writes == 2);
 
@@ -102,6 +125,14 @@ int main() {
     assert(controls.states.status() == StateStatus::Failed && core.applies == 2);
     assert(controls.states.error() == "bad archive");
     Core::fail_read = false;
+
+    controls.restoreBudget = [](const std::string&) { return false; };
+    const int readsBeforeBudget = Core::reads;
+    assert(controls.states.request(true, 1));
+    finish(controls, core, true);
+    assert(controls.states.status() == StateStatus::Failed && Core::reads == readsBeforeBudget);
+    assert(controls.states.error().find("Not enough memory") != std::string::npos);
+    controls.restoreBudget = {};
 
     core.fail_apply = true;
     assert(controls.states.request(true, 1));

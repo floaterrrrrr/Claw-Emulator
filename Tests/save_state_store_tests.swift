@@ -72,10 +72,29 @@ import Foundation
         let stale = try await store.preview(title: title, entry: manual[0]); assert(stale == nil)
         try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1100)], ofItemAtPath: preview.path)
         let current = try await store.preview(title: title, entry: manual[0]); assert(current == preview)
+        let previewEntries = try await store.list(title: title)
+        let savedDate = previewEntries.first { $0.slot == 1 }!.date
+        var highResolution = Data([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,
+                                   0,0,3,32,0,0,1,224]) // 800x480 IHDR, supplied by the app encoder.
+        try await store.storePreview(highResolution, title: title, slot: 1, savedAt: savedDate)
+        let highURL = URL(fileURLWithPath: snapshot.path + ".hires.png")
+        let preferred = try await store.preview(title: title, entry: manual[0]); assert(preferred == highURL)
+        let afterSidecar = try Data(contentsOf: snapshot)
+        assert(afterSidecar == originalBytes, "Sidecar changed the v1 CST bytes")
+        highResolution[16] = 255
+        do { try await store.storePreview(highResolution, title: title, slot: 1, savedAt: savedDate); assertionFailure("Unbounded preview accepted") }
+        catch {}
+        let keptHighResolution = try Data(contentsOf: highURL)
+        assert(keptHighResolution[16] == 0)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1100)], ofItemAtPath: highURL.path)
         try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1200)], ofItemAtPath: snapshot.path)
+        highResolution[16] = 0
+        do { try await store.storePreview(highResolution, title: title, slot: 1, savedAt: savedDate); assertionFailure("An overwritten state accepted an old preview") }
+        catch {}
         let staleAfterOverwrite = try await store.preview(title: title, entry: manual[0]); assert(staleAfterOverwrite == nil)
         let deleted = try await store.delete(title: title, slot: 1); assert(!deleted.contains { $0.slot == 1 })
         assert(!FileManager.default.fileExists(atPath: preview.path))
+        assert(!FileManager.default.fileExists(atPath: highURL.path))
         let retroTitle: UInt64 = 0xC100000000000001
         let retroFile = await store.file(retroTitle, 1)
         var retro = Data(repeating: 0, count: 257)

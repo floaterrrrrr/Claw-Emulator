@@ -67,6 +67,12 @@ struct ControllerSkinLayout: Equatable {
     // artFrames/hitFrames still provide one primary frame per gameplay control.
     let importedFrames: [CGRect]
 
+    func proportionalScreens(enabled: Bool) -> ControllerSkinLayout {
+        ControllerSkinLayout(canvas: canvas, gameplay: gameplay.proportionalScreens(enabled: enabled),
+            artFrames: artFrames, hitFrames: hitFrames, quickSave: quickSave, quickLoad: quickLoad,
+            importedFrames: importedFrames)
+    }
+
     init(canvas: CGRect, gameplay: GameplayLayout, artFrames: [String: CGRect],
          hitFrames: [String: CGRect], quickSave: CGRect, quickLoad: CGRect,
          importedFrames: [CGRect] = []) {

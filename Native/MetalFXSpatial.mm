@@ -57,6 +57,15 @@ bool SpatialTextures::Initialize(id<MTLDevice> device, MTLPixelFormat format, Sp
     return true;
 }
 
+bool SpatialTextures::Matches(id<MTLCommandQueue> queue, id<MTLTexture> source,
+                             id<MTLTexture> destination) const {
+    return scaler && queue && source && destination && input && output &&
+        source.device == queue.device && destination.device == queue.device &&
+        source.pixelFormat == input.pixelFormat && destination.pixelFormat == output.pixelFormat &&
+        source.width == extent.content_width && source.height == extent.content_height &&
+        destination.width == extent.output_width && destination.height == extent.output_height;
+}
+
 bool SpatialTextures::Encode(id<MTLCommandQueue> queue, id<MTLTexture> source,
                              id<MTLTexture> destination,
                              id<MTLSharedEvent> rendered, uint64_t rendered_value,

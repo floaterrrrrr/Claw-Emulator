@@ -13,6 +13,15 @@ import CoreGraphics
             for larger in [false, true] {
                 let safe = CGRect(origin: CGPoint(x: 62, y: 24), size: size)
                 let layout = GameplayLayout.make(in: safe, largerTouchScreen: larger)
+                let proportional = layout.proportionalScreens(enabled: true)
+                precondition(abs(proportional.top.width / 400 - proportional.bottom.width / 320) < 0.001)
+                precondition(abs(proportional.top.height - proportional.bottom.height) < 0.001)
+                for (slot, display) in [(layout.top, proportional.top), (layout.bottom, proportional.bottom)] {
+                    precondition(display.minX >= slot.minX - 0.001 && display.maxX <= slot.maxX + 0.001 &&
+                                 display.minY >= slot.minY - 0.001 && display.maxY <= slot.maxY + 0.001)
+                }
+                precondition(proportional.face == layout.face && proportional.dpad == layout.dpad)
+                precondition(layout.proportionalScreens(enabled: false) == layout)
                 let frames = [layout.top, layout.bottom, layout.circle, layout.dpad, layout.face,
                               layout.leftShoulder, layout.rightShoulder, layout.select, layout.start, layout.gear]
                 for frame in frames {

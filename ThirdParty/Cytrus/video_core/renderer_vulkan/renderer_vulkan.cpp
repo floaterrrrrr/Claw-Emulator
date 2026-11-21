@@ -17,6 +17,7 @@
 #include "video_core/renderer_vulkan/renderer_vulkan.h"
 #include "video_core/renderer_vulkan/vk_memory_util.h"
 #include "video_core/renderer_vulkan/vk_shader_util.h"
+#include "RestorePresentation.hpp"
 
 #include "video_core/host_shaders/vulkan_present_anaglyph_frag.h"
 #include "video_core/host_shaders/vulkan_present_frag.h"
@@ -214,9 +215,9 @@ void RendererVulkan::PrepareRendertarget() {
 }
 
 void RendererVulkan::PrepareDraw(Frame* frame, const Layout::FramebufferLayout& layout) {
-    const auto sampler = present_samplers[!Settings::values.filter_mode.GetValue()];
     const auto present_set = present_heap.Commit();
     for (u32 index = 0; index < screen_infos.size(); index++) {
+        const auto sampler = present_samplers[index == 2 ? 0 : !Settings::values.filter_mode.GetValue()];
         update_queue.AddImageSampler(present_set, 0, index, screen_infos[index].image_view,
                                      sampler);
     }
@@ -282,7 +283,8 @@ Frame* RendererVulkan::PrepareWindowFrame(PresentWindow& window,
             output_layout.height * scale / base, output_layout.bottom_screen_enabled, false);
     }
     if (!Settings::values.use_skip_duplicate_frames.GetValue() ||
-        Core::PerfStats::game_frames_updated || frame_source_changed) {
+        Core::PerfStats::game_frames_updated || frame_source_changed ||
+        Claw::restore_presentation.AwaitingFrames()) {
         Frame* frame = window.GetRenderFrame();
 
         if (layout.width != frame->width || layout.height != frame->height ||
@@ -298,6 +300,12 @@ Frame* RendererVulkan::PrepareWindowFrame(PresentWindow& window,
         clear_color.float32[3] = 1.0f;
 
         DrawScreens(frame, layout, flipped);
+        const auto& top_fb = pica.regs.framebuffer_config[0];
+        const PAddr top_address = top_fb.active_fb == 0 ? top_fb.address_left1 : top_fb.address_left2;
+        const bool top_source_ready = pica.regs_lcd.color_fill_top.is_enabled ||
+            (top_address != 0 && top_fb.width.Value() != 0 && top_fb.height.Value() != 0);
+        frame->presentation_generation = output_layout.top_screen_enabled && top_source_ready &&
+            screen_infos[0].image_view ? Claw::restore_presentation.Generation() : 0;
 #if CLAW_ENABLE_METALFX
         frame->render_tick = scheduler.CurrentTick();
 #endif
@@ -1351,12 +1359,17 @@ void RendererVulkan::SwapBuffers() {
 }
 
 std::vector<u8> RendererVulkan::CaptureSavePreview() {
+    return CaptureDisplayPreview(400, 240);
+}
+
+std::vector<u8> RendererVulkan::CaptureDisplayPreview(u32 width, u32 height) {
     if (current_frame == 0 || !screen_infos[0].image_view || IsScreenshotPending()) return {};
-    std::vector<u8> pixels(400 * 240 * 4);
+    if (width < 400 || width > 1600 || height * 5 != width * 3) return {};
+    std::vector<u8> pixels(width * height * 4);
     // Use the portable staging readback, including on MoltenVK; no display
     // tick or guest frame is needed, so a manually paused game also works.
     settings.screenshot_bits = pixels.data();
-    settings.screenshot_framebuffer_layout = Layout::SingleFrameLayout(400, 240, false, false);
+    settings.screenshot_framebuffer_layout = Layout::SingleFrameLayout(width, height, false, false);
     SCOPE_EXIT({ settings.screenshot_bits = nullptr; });
     RenderScreenshotWithStagingCopy();
     for (size_t i = 0; i < pixels.size(); i += 4) {
@@ -1698,6 +1711,18 @@ void RendererVulkan::InvalidatePresentationCache() {
     bottom_presentation_gate.Invalidate();
     last_bottom_view = nullptr;
 #endif
+}
+
+void RendererVulkan::PrepareStateRestore() {
+    rasterizer.WaitBackgroundDiskResources();
+    rasterizer.WaitShaderResources();
+    scheduler.Finish();
+    main_present_window.WaitPresent();
+    if (secondary_present_window_ptr) secondary_present_window_ptr->WaitPresent();
+    // Also drains Vulkan submissions waiting on MetalFX's shared events.
+    // A one-time restore boundary, not a per-frame queue-idle operation.
+    instance.GetDevice().waitIdle();
+    InvalidatePresentationCache();
 }
 
 } // namespace Vulkan

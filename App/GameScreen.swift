@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import AVFoundation
+import ImageIO
 import GameController
 import Metal
 import QuartzCore
@@ -134,6 +135,16 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
     private let audioActivation = AudioActivation()
     private let top: MetalScreen, bottom: MetalScreen
     private let status = UILabel()
+    private let restoreCurtain = UIView()
+    private let restorePicture = UIImageView()
+    private let restoreSpinner = UIActivityIndicatorView(style: .medium)
+    private let restoreRecovery = UIButton(type: .system)
+    private let restoreBottomVeil = UIView()
+    private var restoringDisplay = false
+    private var curtainTicket = 0
+    private var curtainStarted: TimeInterval = 0
+    private var curtainSlot = 0
+    private var curtainTitle: UInt64 = 0
     private let gear = UIButton(type: .system)
     private let editControlsShortcut = UIButton(type: .system)
     private var returnToGameplayAfterControlEditing = false
@@ -215,7 +226,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
     private var held = HeldInputUnion<PadKey>()
     private var analogInputs: [String: (x: Float, y: Float)] = [:]
     private var analogOrder: [String] = []
-    private var inputLocked: Bool { utilities.busy && pendingSlot < 9 }
+    private var inputLocked: Bool { restoringDisplay || (utilities.busy && pendingSlot < 9) }
     private var started = false, loaded = false, paused = false, stopping = false
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         switch utilities.orientation {
@@ -258,6 +269,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
         bottom = MetalScreen(width: game.platform == .threeDS ? 320 : 256, scale: outputScale,
                              height: game.platform == .threeDS ? 240 : 192, framebufferOnly: game.platform != .threeDS)
         super.init(nibName: nil, bundle: nil)
+        if game.platform == .threeDS { bottom.metalLayer.magnificationFilter = .linear }
         utilities.gameName = game.name
         utilities.system = game.platform
     }
@@ -288,6 +300,26 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
             screen.accessibilityLabel = screen === top ? "Main display" : "Touch display"
             view.addSubview(screen)
         }
+        restoreCurtain.backgroundColor = .black
+        restorePicture.contentMode = .scaleAspectFit
+        restoreCurtain.addSubview(restorePicture)
+        restoreSpinner.color = .white
+        restoreSpinner.hidesWhenStopped = true
+        restoreCurtain.addSubview(restoreSpinner)
+        restoreRecovery.setTitle("Back to library", for: .normal)
+        restoreRecovery.backgroundColor = .black.withAlphaComponent(0.85)
+        restoreRecovery.tintColor = .white
+        restoreRecovery.layer.cornerRadius = 12
+        restoreRecovery.addTarget(self, action: #selector(clawConfirmExit), for: .touchUpInside)
+        restoreRecovery.isHidden = true
+        restoreCurtain.addSubview(restoreRecovery)
+        restoreCurtain.accessibilityIdentifier = "restoreCurtain"
+        restoreCurtain.isHidden = true
+        restoreBottomVeil.backgroundColor = .black
+        restoreBottomVeil.isHidden = true
+        restoreBottomVeil.isUserInteractionEnabled = false
+        view.addSubview(restoreCurtain)
+        view.addSubview(restoreBottomVeil)
         view.addSubview(inputArea)
         inputArea.isUserInteractionEnabled = false
         buildControls()
@@ -359,6 +391,9 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
         let topPointer = Unmanaged.passUnretained(top.metalLayer).toOpaque()
         let bottomPointer = Unmanaged.passUnretained(bottom.metalLayer).toOpaque()
         let lowLatencyAudio = game.platform.core == 1
+        if engine.is3DS {
+            showRestoreCurtain(slot: initialStateSlot ?? 0, titleOverride: game.titleID ?? 0)
+        }
         worker.async { [self] in
             do {
                 try Self.configureAudioSession(lowLatency: lowLatencyAudio)
@@ -504,7 +539,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
             safe = safe.intersection(physical)
         }
         guard !safe.isNull, safe.width > 0, safe.height > 0 else { return }
-        defer { layoutControlShortcut(safe: safe) }
+        defer { layoutControlShortcut(safe: safe); layoutRestoreCurtain() }
         if let configuration = handheldConfiguration, configuration.enabled {
             layoutHandheldControls(configuration, safe: safe)
             return
@@ -537,13 +572,14 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
                                                    hasSecondScreen: game.platform.dualScreen,
                                                    edgeToEdge: candidate?.edgeToEdge ?? false)
         let imported = customLayout == nil ? nil : candidate
-        let themed = customLayout ?? (utilities.skinEnabled ? skin.flatMap {
+        let themed = (customLayout ?? (utilities.skinEnabled ? skin.flatMap {
             ControllerSkinLayout.make(skin: $0, in: safe, bounds: view.bounds,
                                       mainAspect: CGFloat(game.platform.aspect), hasSecondScreen: game.platform.dualScreen,
                                       largerTouchScreen: utilities.largerTouchScreen, hasAnalog: game.platform == .threeDS)
-        } : nil)
+        } : nil))?.proportionalScreens(enabled: engine.is3DS && utilities.proportionalBottomScreen)
         let layout = themed?.gameplay ?? GameplayLayout.make(in: safe, largerTouchScreen: utilities.largerTouchScreen,
             mainAspect: CGFloat(game.platform.aspect), hasSecondScreen: game.platform.dualScreen)
+            .proportionalScreens(enabled: engine.is3DS && utilities.proportionalBottomScreen)
         skinArtwork.frame = view.bounds
         let displayScale = view.window?.screen.scale ?? traitCollection.displayScale
         if themed != lastSkinLayout || utilities.opacity != lastSkinOpacity || displayScale != lastArtworkScale {
@@ -947,6 +983,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
         defaults.set(utilities.opacity, forKey: "controlOpacity")
         defaults.set(utilities.showStats, forKey: "showGameStats")
         defaults.set(utilities.largerTouchScreen, forKey: "largerTouchScreen")
+        defaults.set(utilities.proportionalBottomScreen, forKey: "proportionalBottomScreen")
         defaults.set(utilities.skinEnabled, forKey: "controllerSkin")
         let wasAutosaving = defaults.object(forKey: "autosaveEnabled") as? Bool ?? true
         defaults.set(utilities.autosaveEnabled, forKey: "autosaveEnabled")
@@ -1205,6 +1242,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
         }
         pendingSlot = selected; pendingName = name; stateRequestPending = true
         utilities.busy = true
+        if restore && engine.is3DS { showRestoreCurtain(slot: selected) }
         utilities.message = restore ? "Loading slot \(selected)…" : "Saving slot \(selected)…"
         gear.isEnabled = false
         menuHost?.isModalInPresentation = true
@@ -1223,10 +1261,21 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
     }
     private func refreshStates(recordName: String? = nil, slot: Int = 1, completion: @escaping @MainActor () -> Void = {}) {
         let title = titleID
+        let engine = engine, queue = DispatchQueue.global(qos: .utility)
         Task { [weak self, stateStore] in
             do {
                 let entries: [SaveEntry]
-                if let name = recordName { entries = try await stateStore.record(title: title, slot: slot, name: name) }
+                if let name = recordName {
+                    entries = try await stateStore.record(title: title, slot: slot, name: name)
+                    guard self?.stopping == false else { return }
+                    let image: Data? = await withCheckedContinuation { continuation in
+                        queue.async { continuation.resume(returning: engine.savePreview(title: title, slot: slot)) }
+                    }
+                    guard self?.stopping == false else { return }
+                    if let image, let saved = entries.first(where: { $0.slot == slot }) {
+                        try? await stateStore.storePreview(image, title: title, slot: slot, savedAt: saved.date)
+                    }
+                }
                 else { entries = try await stateStore.list(title: title) }
                 guard let self, !self.stopping else { return }
                 self.utilities.states = entries
@@ -1346,6 +1395,65 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
         }
         applyPausedState(value)
     }
+    private func layoutRestoreCurtain() {
+        restoreCurtain.frame = top.frame
+        restoreBottomVeil.frame = bottom.frame
+        restorePicture.frame = restoreCurtain.bounds
+        restoreSpinner.center = CGPoint(x: restoreCurtain.bounds.midX, y: restoreCurtain.bounds.midY)
+        restoreRecovery.frame = CGRect(x: max(0, restoreCurtain.bounds.midX - 80),
+            y: max(0, restoreCurtain.bounds.maxY - 52), width: min(160, restoreCurtain.bounds.width), height: 44)
+    }
+    private func showRestoreCurtain(slot: Int, titleOverride: UInt64? = nil) {
+        let title = titleOverride ?? titleID
+        if restoringDisplay && curtainSlot == slot && curtainTitle == title { return }
+        curtainTicket += 1
+        let ticket = curtainTicket
+        curtainSlot = slot; curtainTitle = title
+        restoringDisplay = true
+        curtainStarted = ProcessInfo.processInfo.systemUptime
+        restoreCurtain.layer.removeAllAnimations()
+        restoreCurtain.alpha = 1; restorePicture.image = nil
+        restoreCurtain.isHidden = false; restoreBottomVeil.isHidden = false
+        restoreRecovery.isHidden = true
+        restoreSpinner.startAnimating()
+        restoreSpinner.isAccessibilityElement = true
+        restoreSpinner.accessibilityLabel = slot > 0 ? "Restoring saved game" : "Starting game"
+        layoutRestoreCurtain()
+        Task { [weak self, stateStore] in
+            guard let entries = try? await stateStore.list(title: title),
+                  let entry = entries.first(where: { $0.slot == slot }),
+                  let url = try? await stateStore.preview(title: title, entry: entry),
+                  let self, self.curtainTicket == ticket else { return }
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                      let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceThumbnailMaxPixelSize: 1600,
+                        kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else { return }
+                let image = UIImage(cgImage: decoded)
+                DispatchQueue.main.async {
+                    guard let self, self.curtainTicket == ticket, self.restoringDisplay else { return }
+                    self.restorePicture.image = image
+                }
+            }
+        }
+    }
+    private func hideRestoreCurtain() {
+        guard restoringDisplay else { return }
+        restoringDisplay = false
+        curtainTicket += 1
+        let ticket = curtainTicket
+        restoreSpinner.stopAnimating()
+        UIView.animate(withDuration: UIAccessibility.isReduceMotionEnabled ? 0 : 0.2, animations: {
+            self.restoreCurtain.alpha = 0
+        }, completion: { [weak self] _ in
+            guard let self, self.curtainTicket == ticket else { return }
+            self.restoreCurtain.isHidden = true; self.restorePicture.image = nil
+            self.restoreBottomVeil.isHidden = true
+        })
+        inputArea.isUserInteractionEnabled = !paused && !inputLocked
+        ControlHaptics.shared.setActive(!paused && !inputLocked)
+    }
     private func updateThermalState() {
         guard loaded, !stopping else { return }
         engine.setThermalState(Int32(ProcessInfo.processInfo.thermalState.rawValue))
@@ -1364,6 +1472,8 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
     private func sample() {
         guard loaded, !stopping else { return }
         let uptime = ProcessInfo.processInfo.systemUptime
+        if restoringDisplay && !utilities.busy && engine.restoreDisplayReady() { hideRestoreCurtain() }
+        if restoringDisplay && uptime - curtainStarted > 15 { restoreRecovery.isHidden = false }
         if uptime >= nextMemoryHeadroomCheck {
             nextMemoryHeadroomCheck = uptime + 2
             let available = engine.availableMemoryBytes()
@@ -1378,6 +1488,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
                 case 3: utilities.message = "Slot \(pendingSlot) loaded. Tap Resume to continue."
                 default: utilities.message = String(cString: engine.stateError())
                 }
+                if operation != 3 { hideRestoreCurtain() }
                 let shouldResume = continueAfterRestore
                 continueAfterRestore = false
                 let shouldLeave = saveAndLeave && operation == 2
@@ -1389,7 +1500,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
                     self.utilities.busy = false
                     self.gear.isEnabled = true
                     self.menuHost?.isModalInPresentation = false
-                    self.inputArea.isUserInteractionEnabled = !self.paused
+                    self.inputArea.isUserInteractionEnabled = !self.paused && !self.inputLocked
                     if shouldResume {
                         if operation == 3 { self.setPaused(false) }
                         else if self.engine.isRunning() { self.continueNormalBootAfterRestoreFailure() }
@@ -1413,7 +1524,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
             }
             return
         }
-        if utilities.autosaveEnabled, !paused, !utilities.busy, !schedulingAutosave,
+        if utilities.autosaveEnabled, !paused, !utilities.busy, !restoringDisplay, !schedulingAutosave,
            ProcessInfo.processInfo.systemUptime >= nextAutosave { scheduleAutosave() }
         let graphics: String
         let thermal = engine.appliedThermalState()
@@ -1468,6 +1579,7 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
     }
     private func showError(_ message: String) {
         guard !stopping else { return }
+        hideRestoreCurtain()
         checkpointPlaytime()
         ControlHaptics.shared.setActive(false)
         audioActivation.cancel()

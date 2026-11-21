@@ -68,6 +68,10 @@ public:
     std::atomic<int> speedMultiplier{1};
     StateRequestQueue states;
     std::function<void()> wake;
+    std::function<void(Core::System&, unsigned)> capturePreview;
+    std::function<void()> restoreStarted;
+    std::function<void()> restoreWarmed;
+    std::function<bool(const std::string&)> restoreBudget;
     // Called only on the emulation thread; core settings never change on the UI thread.
     void process(Core::System& system, bool paused);
     // Called before starting a session, after the preceding core thread has joined.

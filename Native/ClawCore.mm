@@ -8,6 +8,7 @@
 #include "PerformanceWindow.hpp"
 #include "FrameworkProbe.hpp"
 #include "MetalFXSpatial.hpp"
+#include "RestorePresentation.hpp"
 #include "audio_core/coreaudio_sink.h"
 #include "configuration.h"
 #include "emu_window_vk.h"
@@ -31,11 +32,13 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <dlfcn.h>
 #include <exception>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <zstd.h>
 #include <pthread/qos.h>
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -51,6 +54,10 @@ bool IsRunningFromTerminal() { return false; }
 namespace {
 SessionGate gate;
 Claw::SessionControls controls;
+std::mutex previewMutex;
+std::vector<u8> savedPreview;
+unsigned savedPreviewSlot{}, savedPreviewWidth{}, savedPreviewHeight{};
+u64 savedPreviewTitle{};
 std::thread emulationThread;
 std::atomic<bool> active{false};
 std::atomic<bool> pipelineCacheSaveRequested{false};
@@ -287,6 +294,38 @@ int Claw3DSLoad(const char* rom, const char* dataDirectory, void* topLayer, void
     lastError.clear();
     { std::lock_guard lock(workerErrorMutex); workerError.clear(); }
     controls.reset();
+    Claw::restore_presentation.Reset();
+    { std::lock_guard lock(previewMutex); savedPreview.clear(); savedPreviewSlot = 0; }
+    controls.restoreStarted = [] { Claw::restore_presentation.Begin(); };
+    controls.restoreWarmed = [] { Claw::restore_presentation.Warmed(); };
+    controls.restoreBudget = [](const std::string& path) {
+        FileUtil::IOFile file(path, "rb");
+        const auto size = file.GetSize();
+        // v1 CST header is 256 bytes. This is read-only preflight, not a new
+        // state header; the original core still validates every field/payload.
+        std::array<u8, 18> header{};
+        if (!file || size <= 256 || !file.Seek(256, SEEK_SET)) return true;
+        const auto count = file.ReadBytes(header.data(), header.size());
+        const auto expanded = ZSTD_getFrameContentSize(header.data(), count);
+        if (expanded == ZSTD_CONTENTSIZE_ERROR || expanded == ZSTD_CONTENTSIZE_UNKNOWN ||
+            expanded > 512ULL * 1024 * 1024 || size > 256ULL * 1024 * 1024) return true;
+        const auto available = os_proc_available_memory();
+        return available == 0 || available > size + expanded + 96ULL * 1024 * 1024;
+    };
+    controls.capturePreview = [](Core::System& system, unsigned slot) {
+        std::vector<u8> image;
+        const unsigned scale = std::clamp(system.GPU().Renderer().GetResolutionScaleFactor(), 1u, 4u);
+        // Optional pixels must not jeopardize the state or contend with a
+        // decompression allocation on memory-constrained devices.
+        try {
+            if (os_proc_available_memory() > 96ULL * 1024 * 1024)
+                image = system.GPU().Renderer().CaptureDisplayPreview(400 * scale, 240 * scale);
+        } catch (...) { image.clear(); }
+        std::lock_guard lock(previewMutex);
+        savedPreview = std::move(image); savedPreviewSlot = slot;
+        savedPreviewTitle = system.StateTitle();
+        savedPreviewWidth = 400 * scale; savedPreviewHeight = 240 * scale;
+    };
     pipelineCacheSaveRequested.store(false);
     Claw::ResetMobileThermal();
     { std::lock_guard lock(performanceMutex); performanceSample = {}; performanceWindow.Reset(); }
@@ -329,6 +368,28 @@ int Claw3DSLoad(const char* rom, const char* dataDirectory, void* topLayer, void
         }
         FileUtil::UpdateUserPath(FileUtil::UserPath::CacheDir,
                                  std::string(cacheURL.fileSystemRepresentation) + "/");
+        NSURL* support = [NSFileManager.defaultManager URLForDirectory:NSApplicationSupportDirectory
+                          inDomain:NSUserDomainMask appropriateForURL:nil create:YES error:nil];
+        NSURL* shaders = [support URLByAppendingPathComponent:@"ShaderCache" isDirectory:YES];
+        if (shaders) {
+            NSString* oldShaders = [NSString stringWithUTF8String:FileUtil::GetUserPath(FileUtil::UserPath::ShaderDir).c_str()];
+            bool migrated = true;
+            if ([NSFileManager.defaultManager fileExistsAtPath:oldShaders] &&
+                ![NSFileManager.defaultManager fileExistsAtPath:shaders.path]) {
+                // Copy, never delete the previous cache. Failure keeps the old
+                // persistent path; cached shaders are an optimization, not a boot requirement.
+                NSURL* staging = [support URLByAppendingPathComponent:
+                    [@"ShaderCache.migration-" stringByAppendingString:NSUUID.UUID.UUIDString] isDirectory:YES];
+                migrated = [NSFileManager.defaultManager copyItemAtPath:oldShaders toPath:staging.path error:nil] &&
+                    [NSFileManager.defaultManager moveItemAtURL:staging toURL:shaders error:nil];
+                if (!migrated) [NSFileManager.defaultManager removeItemAtURL:staging error:nil];
+            }
+            if (migrated && FileUtil::CreateFullPath(std::string(shaders.fileSystemRepresentation) + "/")) {
+                [shaders setResourceValue:@YES forKey:NSURLIsExcludedFromBackupKey error:nil];
+                FileUtil::UpdateUserPath(FileUtil::UserPath::ShaderDir,
+                                         std::string(shaders.fileSystemRepresentation) + "/");
+            }
+        }
         // Claw3DSStop above joined the old session; publish hardware budgets before
         // constructing the renderer or starting its workers.
         Claw::InitializeMobileDeviceProfile(dataRoot.c_str());
@@ -412,6 +473,9 @@ int Claw3DSLoad(const char* rom, const char* dataDirectory, void* topLayer, void
             Claw3DSStop();
             return static_cast<int>(result);
         }
+        RecordLaunchStage("Loading persistent shader resources");
+        system.GPU().Renderer().Rasterizer()->LoadDefaultDiskResources(false, nullptr);
+        Claw::restore_presentation.Warmed();
         RecordLaunchStage("3DS core loaded; starting emulation worker");
         loadedTitle.store(system.StateTitle());
         fps.store(0);
@@ -435,12 +499,12 @@ int Claw3DSLoad(const char* rom, const char* dataDirectory, void* topLayer, void
                 try {
                     while (gate.waitForWork() != SessionGate::Wake::Stopped) {
                         const bool paused = gate.isPaused();
-                        auto* rasterizer = system.GPU().Renderer().Rasterizer();
                         if (pipelineSavePending) {
-                            rasterizer->WaitBackgroundDiskResources();
+                            system.GPU().Renderer().Rasterizer()->WaitBackgroundDiskResources();
                             pipelineSavePending = false;
                         }
                         controls.process(system, paused);
+                        auto* rasterizer = system.GPU().Renderer().Rasterizer();
                         if (paused && pipelineCacheSaveRequested.exchange(false)) {
                             rasterizer->SaveBackgroundDiskResources(FinishPipelineCacheBackgroundTask);
                             pipelineSavePending = true;
@@ -563,6 +627,7 @@ void Claw3DSStop() {
     // Finish the current RunLoop and join before destroying the system or display surfaces.
     if (emulationThread.joinable()) emulationThread.join();
     controls.joinStateWorker();
+    { std::lock_guard lock(previewMutex); std::vector<u8>{}.swap(savedPreview); savedPreviewSlot = 0; }
     loadedTitle.store(0);
     std::lock_guard lock(inputMutex);
     if (sessionLoaded) {
@@ -608,7 +673,11 @@ void Claw3DSRequestPipelineCacheSave() {
 void Claw3DSSetVolume(float volume) {
     AudioCore::SetCoreAudioVolume(volume);
 }
-void Claw3DSMemoryPressure() { Claw::ReleaseTransitionCache(); }
+void Claw3DSMemoryPressure() {
+    Claw::ReleaseTransitionCache();
+    std::lock_guard lock(previewMutex);
+    std::vector<u8>{}.swap(savedPreview); savedPreviewSlot = 0;
+}
 void Claw3DSSetThermalState(int state) {
     Claw::mobile_requested_thermal_state.store(std::clamp(state, 0, 3), std::memory_order_relaxed);
     gate.notifyWork();
@@ -632,6 +701,20 @@ static bool RequestState(bool restore, int slot) {
 }
 bool Claw3DSSaveState(int slot) { return RequestState(false, slot); }
 bool Claw3DSLoadState(int slot) { return RequestState(true, slot); }
+bool Claw3DSRestoreDisplayReady() { return Claw::restore_presentation.Ready(); }
+int Claw3DSCopySavePreview(uint64_t title, int slot, void* bytes, int capacity, int* width, int* height) {
+    std::lock_guard lock(previewMutex);
+    if (slot < 1 || savedPreviewTitle != title || savedPreviewSlot != static_cast<unsigned>(slot) || savedPreview.empty()) return 0;
+    if (width) *width = static_cast<int>(savedPreviewWidth);
+    if (height) *height = static_cast<int>(savedPreviewHeight);
+    const auto count = static_cast<int>(savedPreview.size());
+    if (bytes && capacity >= count) {
+        std::memcpy(bytes, savedPreview.data(), savedPreview.size());
+        std::vector<u8>{}.swap(savedPreview);
+    }
+    else if (bytes) return 0;
+    return count;
+}
 uint64_t Claw3DSCurrentTitle() { return loadedTitle.load(); }
 int Claw3DSStateStatus() { return static_cast<int>(controls.states.status()); }
 const char* Claw3DSStateError() {

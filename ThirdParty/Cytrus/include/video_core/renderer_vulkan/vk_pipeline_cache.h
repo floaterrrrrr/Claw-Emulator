@@ -44,6 +44,10 @@ public:
     explicit PipelineCache(const Instance& instance, Scheduler& scheduler,
                            RenderManager& renderpass_cache, DescriptorUpdateQueue& update_queue);
     ~PipelineCache();
+    void WaitShaderResources() {
+        shader_workers.WaitForRequests();
+        pipeline_workers.WaitForRequests();
+    }
 
     /// Acquires and binds a free descriptor set from the appropriate heap.
     vk::DescriptorSet Acquire(DescriptorHeapType type) {
