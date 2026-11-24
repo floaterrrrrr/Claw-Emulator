@@ -20,6 +20,7 @@
 #include "video_core/renderer_vulkan/vk_pipeline_cache.h"
 #include "video_core/renderer_vulkan/descriptor_binding_range.h"
 #include "VulkanPipelineBlob.hpp"
+#include "PicaTevUbershader.hpp"
 #include "common/scm_rev.h"
 #include "video_core/renderer_vulkan/vk_render_manager.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -66,7 +67,7 @@ void WritePipelineBlobFile(void* context) {
 dispatch_queue_t PipelineIOQueue() {
     static dispatch_queue_t queue = dispatch_queue_create(
         "claw.pipeline-cache.io",
-        dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_BACKGROUND, 0));
+        dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_UTILITY, 0));
     return queue;
 }
 #endif
@@ -125,10 +126,14 @@ PipelineCache::PipelineCache(const Instance& instance_, Scheduler& scheduler_,
                              RenderManager& renderpass_cache_, DescriptorUpdateQueue& update_queue_)
     : instance{instance_}, scheduler{scheduler_}, renderpass_cache{renderpass_cache_},
       update_queue{update_queue_},
+      use_tev_ubershader{instance.IsMoltenVK() &&
+          Claw::pica_tev_ubershader_enabled.load(std::memory_order_relaxed)},
       num_worker_threads{instance.IsMoltenVK() ?
           std::min(2U, std::max(std::thread::hardware_concurrency(), 2U) / 2) :
           std::max(std::thread::hardware_concurrency(), 2U) / 2},
-      pipeline_workers{num_worker_threads, "Pipeline workers"},
+      pipeline_workers{PipelineWorkerCount(instance.IsMoltenVK(), num_worker_threads),
+                       "Pipeline workers", {}, instance.IsMoltenVK() ? Common::ThreadQoS::Utility
+                                                                    : Common::ThreadQoS::Inherit},
       shader_workers{num_worker_threads, "Shader workers"},
       descriptor_heaps{
           DescriptorHeap{instance, scheduler.GetMasterSemaphore(), BUFFER_BINDINGS, 32},
@@ -178,11 +183,16 @@ void PipelineCache::BuildLayout() {
     descriptor_set_layouts[1] = descriptor_heaps[1].Layout();
     descriptor_set_layouts[2] = descriptor_heaps[2].Layout();
 
+    const vk::PushConstantRange tev_range{
+        .stageFlags = vk::ShaderStageFlagBits::eFragment,
+        .offset = 0,
+        .size = sizeof(Claw::PicaTevPushConstants),
+    };
     const vk::PipelineLayoutCreateInfo layout_info = {
         .setLayoutCount = NumRasterizerSets,
         .pSetLayouts = descriptor_set_layouts.data(),
-        .pushConstantRangeCount = 0,
-        .pPushConstantRanges = nullptr,
+        .pushConstantRangeCount = use_tev_ubershader ? 1u : 0u,
+        .pPushConstantRanges = use_tev_ubershader ? &tev_range : nullptr,
     };
     pipeline_layout = instance.GetDevice().createPipelineLayoutUnique(layout_info);
 }
@@ -229,10 +239,43 @@ void PipelineCache::WaitBackgroundCache() {
 #endif
 }
 
+void PipelineCache::BeginBlockingLoad() {
+    if (instance.IsMoltenVK()) {
+        warmup_policy.BeginLoading();
+        pipeline_workers.SetUrgentQoS(Common::ThreadQoS::UserInitiated);
+    }
+}
+
+void PipelineCache::PumpBackgroundPipelines(bool presentation_completed) {
+    if (!instance.IsMoltenVK()) {
+        return;
+    }
+    if (warmup_policy.ObserveFrame(presentation_completed)) {
+        pipeline_workers.SetUrgentQoS(Common::ThreadQoS::Inherit);
+    }
+    if (curr_disk_cache && warmup_policy.AllowsBackgroundWork()) {
+        curr_disk_cache->PumpBackgroundPipelines();
+    }
+}
+
 void PipelineCache::LoadCache(const std::atomic_bool& stop_loading,
                               const VideoCore::DiskResourceLoadCallback& callback) {
-    LoadDriverPipelineDiskCache(stop_loading, callback);
-    LoadDiskCache(stop_loading, callback);
+    // Continue can reload disk resources on a live renderer. Jobs capture the
+    // old VkPipelineCache and Shader pointers, so waiting in ~ShaderDiskCache
+    // (after replacing the driver cache) is too late.
+    BeginBlockingLoad();
+    WaitBackgroundCache();
+    WaitShaderResources();
+    scheduler.Finish();
+    current_pipeline = nullptr;
+    // Keep MoltenVK's live owner and warmed libraries across restores. A null
+    // cache still uses shader-module-owned libraries and cannot fix a dangling
+    // owner. Validated serialized data is loaded only when this owner is new.
+    const bool can_reuse = driver_pipeline_cache && instance.IsMoltenVK();
+    if (!can_reuse) {
+        LoadDriverPipelineDiskCache(stop_loading, callback);
+    }
+    LoadDiskCache(stop_loading, callback, can_reuse);
 }
 
 void PipelineCache::SwitchCache(u64 title_id, const std::atomic_bool& stop_loading,
@@ -383,8 +426,22 @@ void PipelineCache::SaveDriverPipelineDiskCache() {
 }
 
 void PipelineCache::LoadDiskCache(const std::atomic_bool& stop_loading,
-                                  const VideoCore::DiskResourceLoadCallback& callback) {
-
+                                  const VideoCore::DiskResourceLoadCallback& callback,
+                                  bool can_reuse) {
+    // No captured shader/pipeline storage may be released while a job runs.
+    WaitShaderResources();
+    current_pipeline = nullptr;
+    current_shaders.fill(nullptr);
+    shader_hashes.fill(0);
+    current_tev_config.reset();
+    // The restore boundary above has drained compiler and recorded draw work.
+    // Same-title pipelines still match the device, layout and shader profile.
+    if (can_reuse && !stop_loading && curr_disk_cache &&
+        curr_disk_cache->Matches(GetProgramID(), profile,
+                                 Settings::values.use_disk_shader_cache.GetValue())) {
+        return;
+    }
+    curr_disk_cache.reset();
     disk_caches.clear();
     curr_disk_cache =
         disk_caches.emplace_back(std::make_shared<ShaderDiskCache>(*this, GetProgramID()));
@@ -461,11 +518,36 @@ bool PipelineCache::BindPipeline(PipelineInfo& info, bool wait_built) {
     // including shader IDs, vertex layout, attachment formats and blend state.
     // Consecutive matching draws can reuse the lookup without two hashes and
     // two hash-table probes. Dynamic state is still applied below on every draw.
-    GraphicsPipeline* const pipeline = current_pipeline && info == current_info
-                                          ? current_pipeline
-                                          : curr_disk_cache->GetPipeline(info);
-    if (!pipeline->IsDone() && !pipeline->TryBuild(wait_built)) {
-        return false;
+    GraphicsPipeline* pipeline = current_pipeline && !current_pipeline_is_uber && info == current_info
+                                     ? current_pipeline
+                                     : curr_disk_cache->GetPipeline(info);
+    std::optional<Claw::PicaTevPushConstants> tev_state;
+    if (!pipeline->IsDone()) {
+        GraphicsPipeline* fallback = current_tev_config
+            ? curr_disk_cache->FindTevPipeline(info, *current_tev_config)
+            : nullptr;
+        const bool blocking_draw = wait_built ||
+            (instance.IsMoltenVK() && !warmup_policy.AllowsBackgroundWork());
+        const auto choice = Claw::SelectTevPipeline(
+            pipeline->IsDone(), fallback && fallback->IsDone() && fallback->HasHandle(),
+            use_tev_ubershader, blocking_draw);
+        if (choice == Claw::TevPipelineChoice::Ubershader) {
+            curr_disk_cache->DeferSpecialization(pipeline);
+            pipeline = fallback;
+            const auto& fs = *current_tev_config;
+            tev_state = Claw::PackPicaTev(fs.texture.tev_stages,
+                fs.texture.combiner_buffer_input.Value(),
+                static_cast<u32>(fs.framebuffer.alpha_test_func.Value()));
+        } else if (choice != Claw::TevPipelineChoice::Specialized) {
+            if (!pipeline->TryBuild(choice == Claw::TevPipelineChoice::Wait)) {
+                return false;
+            }
+            // Retain the compatible generic variant for post-presentation
+            // prewarming. The required draw is the only work submitted here.
+            if (current_tev_config && !fallback) {
+                curr_disk_cache->DeferTevWarmup(info, *current_tev_config, current_shaders);
+            }
+        }
     }
 
     const bool is_dirty = scheduler.IsStateDirty(StateFlags::Pipeline);
@@ -596,8 +678,15 @@ bool PipelineCache::BindPipeline(PipelineInfo& info, bool wait_built) {
         }
     });
 
+    if (tev_state) {
+        scheduler.Record([layout = *pipeline_layout, state = *tev_state](vk::CommandBuffer cmdbuf) {
+            cmdbuf.pushConstants(layout, vk::ShaderStageFlagBits::eFragment,
+                                 0, sizeof(state), &state);
+        });
+    }
     current_info = info;
     current_pipeline = pipeline;
+    current_pipeline_is_uber = tev_state.has_value();
     last_descriptor_sets = bound_descriptor_sets;
     last_offsets = offsets;
     scheduler.MarkStateNonDirty(StateFlags::Pipeline | StateFlags::DescriptorSets);
@@ -681,7 +770,13 @@ void PipelineCache::UseTrivialGeometryShader() {
 void PipelineCache::UseFragmentShader(const Pica::RegsInternal& regs,
                                       const Pica::Shader::UserConfig& user) {
 
-    auto res = curr_disk_cache->UseFragmentShader(regs, user);
+    const FSConfig fs_config{regs};
+    if (use_tev_ubershader && user.IsCacheable()) {
+        current_tev_config = fs_config;
+    } else {
+        current_tev_config.reset();
+    }
+    auto res = curr_disk_cache->UseFragmentShader(fs_config, user);
 
     if (res.has_value()) {
         current_shaders[ProgramType::FS] = (*res).second;

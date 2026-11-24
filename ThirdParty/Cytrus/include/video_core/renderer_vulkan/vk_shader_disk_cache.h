@@ -4,8 +4,10 @@
 
 #pragma once
 
+#include <deque>
 #include <mutex>
 #include <optional>
+#include <unordered_map>
 #include <unordered_set>
 #include <tsl/robin_map.h>
 
@@ -35,11 +37,22 @@ public:
     std::optional<std::pair<u64, Shader* const>> UseProgrammableVertexShader(
         const Pica::RegsInternal& regs, Pica::ShaderSetup& setup, const VertexLayout& layout);
     std::optional<std::pair<u64, Shader* const>> UseFragmentShader(
-        const Pica::RegsInternal& regs, const Pica::Shader::UserConfig& user);
+        const Pica::Shader::FSConfig& fs_config, const Pica::Shader::UserConfig& user);
     std::optional<std::pair<u64, Shader* const>> UseFixedGeometryShader(
         const Pica::RegsInternal& regs);
 
     GraphicsPipeline* GetPipeline(const PipelineInfo& info);
+    GraphicsPipeline* FindTevPipeline(PipelineInfo info, Pica::Shader::FSConfig config);
+    void DeferTevWarmup(PipelineInfo info, Pica::Shader::FSConfig config,
+                        std::array<Shader*, 3> shaders);
+    void DeferSpecialization(GraphicsPipeline* pipeline);
+    void PumpBackgroundPipelines();
+
+    bool Matches(u64 program_id, const Pica::Shader::Profile& profile,
+                 bool disk_cache_enabled) const {
+        return title_id == program_id && loaded_profile == profile &&
+               loaded_disk_cache_enabled == disk_cache_enabled;
+    }
 
     u64 GetProgramID() const {
         return title_id;
@@ -47,6 +60,7 @@ public:
 
 private:
     static constexpr std::size_t SOURCE_FILE_HASH_LENGTH = 64;
+    static constexpr std::size_t max_tev_pipelines = 64;
     using SourceFileCacheVersionHash = std::array<u8, SOURCE_FILE_HASH_LENGTH>;
 
     static SourceFileCacheVersionHash GetSourceFileCacheVersionHash();
@@ -302,7 +316,8 @@ private:
         size_t cached_file_data_start{};
         std::vector<u8> cached_file_data;
         std::atomic<size_t> next_entry_id = SIZE_MAX;
-        Common::ThreadWorker append_worker{1, "Disk Shader Cache Append Worker"};
+        Common::ThreadWorker append_worker{1, "Disk Shader Cache Append Worker", {},
+                                          Common::ThreadQoS::Utility};
     };
 
     std::string GetVSFile(u64 title_id, bool is_temp) const;
@@ -338,6 +353,14 @@ private:
 
     void AppendPLConfig(CacheFile& file, const PLConfigEntry& entry, u64 config_id);
 
+    struct TevWarmup {
+        u64 pipeline_id;
+        PipelineInfo info;
+        Pica::Shader::FSConfig config;
+        std::array<Shader*, 3> shaders;
+    };
+    GraphicsPipeline* CreateTevPipeline(const TevWarmup& warmup);
+
     CacheFile vs_cache;
     CacheFile fs_cache;
     CacheFile gs_cache;
@@ -345,6 +368,8 @@ private:
 
     PipelineCache& parent;
     u64 title_id;
+    std::optional<Pica::Shader::Profile> loaded_profile;
+    bool loaded_disk_cache_enabled{};
 
     std::unordered_map<u64, Shader> programmable_vertex_cache;
     std::unordered_map<u64, Shader*> programmable_vertex_map;
@@ -358,6 +383,16 @@ private:
     tsl::robin_map<u64, std::unique_ptr<GraphicsPipeline>, Common::IdentityHash<u64>>
         graphics_pipelines;
     std::unordered_set<u64> known_graphic_pipelines;
+
+    // Launch warmup uses existing transferable configs. Runtime variants stay
+    // private to this disk-cache owner and share its existing drain boundaries.
+    std::unordered_map<u64, Pica::Shader::FSConfig> tev_warmup_configs;
+    std::unordered_map<u64, Shader> tev_fragment_shaders;
+    std::unordered_map<u64, std::unique_ptr<GraphicsPipeline>> tev_pipelines;
+    std::unordered_set<u64> known_tev_pipelines;
+    std::deque<TevWarmup> tev_warmups;
+    std::unordered_set<GraphicsPipeline*> known_deferred_specializations;
+    std::deque<GraphicsPipeline*> deferred_specializations;
 };
 
 } // namespace Vulkan

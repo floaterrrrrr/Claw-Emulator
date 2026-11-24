@@ -20,10 +20,17 @@ inline void ResetMobileThermal() noexcept {
 inline bool MobileThermallyLimited() noexcept {
     return mobile_applied_thermal_state.load(std::memory_order_relaxed) >= 2;
 }
-constexpr int ThermalRenderScale(int preferred_internal, int preferred_output, int state) noexcept {
-    if (state >= 3) return 1;
-    if (state == 2) return preferred_output > 2 ? 2 : 1;
-    return std::clamp(preferred_internal, 1, 4);
+constexpr int PresentationTargetScale(int output, int metalfx_input, bool bottom_only,
+                                      bool can_scale) noexcept {
+    if (!can_scale) return output;
+    if (bottom_only) return std::min(output, 2);
+    return metalfx_input > 0 ? std::min(output, metalfx_input) : output;
+}
+
+constexpr int ThermalPresentationScale(int target, int output, bool can_scale, int state) noexcept {
+    if (!can_scale || state < 2) return target;
+    const int limit = state >= 3 || output <= 2 ? 1 : 2;
+    return std::min(target, limit);
 }
 constexpr int ThermalPresentationFPS(int state) noexcept { return state >= 3 ? 30 : 60; }
 constexpr uint64_t ThermalTransitionBudget(uint64_t preferred, int state) noexcept {
@@ -34,7 +41,12 @@ class MobileThermalGovernor {
 public:
     using Clock = std::chrono::steady_clock;
     // All calls belong to one core/render worker. Time is injected in tests.
-    int Observe(int reported, Clock::time_point now) noexcept {
+    int Observe(int reported, Clock::time_point now, bool enabled = true) noexcept {
+        if (!enabled) {
+            applied = 0;
+            cooling_since.reset();
+            return applied;
+        }
         const int target = reported >= 3 ? 3 : reported == 2 ? 2 : 0;
         if (target >= applied) {
             applied = target;

@@ -45,6 +45,7 @@ task_ci_clang="$(xcrun --sdk macosx --find clang++)"
 printf '#include <array>\nint main() { return std::array<int, 1>{}[0]; }\n' | \
     "$task_ci_clang" -std=c++20 -x c++ -fsyntax-only -
 CXX="$task_ci_clang" run_step "Restore presentation and license reader tests" bash Scripts/test-phase-one.sh
+CXX="$task_ci_clang" run_step "iOS save-state path tests" bash Scripts/test-savestate-paths.sh --portable-only
 CXX="$task_ci_clang" run_step "Fast-forward core tests" python3 Tests/test_fast_forward_core.py
 CXX="$task_ci_clang" run_step "Session save and restore tests" python3 Tests/test_session_controls.py
 CXX="$task_ci_clang" run_step "Critical core diagnostic tests" python3 Tests/test_core_failure_diagnostic.py
@@ -54,6 +55,8 @@ CXX="$task_ci_clang" run_step "Rasterizer page cache and libc++ interval regress
 CXX="$task_ci_clang" run_step "Interpreter invalidation tests" bash Scripts/test-fastinterp-invalidation.sh
 CXX="$task_ci_clang" run_step "Descriptor binding tests" bash Scripts/test-descriptor-binding-range.sh
 CXX="$task_ci_clang" run_step "Vulkan presentation cache tests" bash Scripts/test-vulkan-presentation-cache.sh
+CXX="$task_ci_clang" run_step "3DS performance policy tests" bash Scripts/test-three-ds-performance.sh
+CXX="$task_ci_clang" run_step "PICA TEV ubershader tests" bash Scripts/test-pica-tev-ubershader.sh
 run_step "Apple audio tests" bash Scripts/test-apple-audio.sh
 run_step "Retro failure handling tests" bash Scripts/test-retro-failures.sh
 run_step "Retro presentation tests" bash Scripts/test-retro-presentation.sh

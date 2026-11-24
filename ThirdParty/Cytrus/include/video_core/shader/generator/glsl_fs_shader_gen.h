@@ -10,7 +10,8 @@ namespace Pica::Shader::Generator::GLSL {
 
 class FragmentModule {
 public:
-    explicit FragmentModule(const FSConfig& config, const UserConfig& user, const Profile& profile);
+    explicit FragmentModule(const FSConfig& config, const UserConfig& user, const Profile& profile,
+                            bool dynamic_tev = false);
     ~FragmentModule();
 
     /// Emits GLSL source corresponding to the provided pica fragment configuration
@@ -90,6 +91,7 @@ private:
     bool use_blend_fallback{};
     bool use_fragment_shader_interlock{};
     bool use_fragment_shader_barycentric{};
+    bool dynamic_tev{};
 };
 
 /**
@@ -100,5 +102,6 @@ private:
  */
 std::string GenerateFragmentShader(const FSConfig& config, const UserConfig& user,
                                    const Profile& profile);
+std::string GenerateTevUbershader(const FSConfig& config, const Profile& profile);
 
 } // namespace Pica::Shader::Generator::GLSL

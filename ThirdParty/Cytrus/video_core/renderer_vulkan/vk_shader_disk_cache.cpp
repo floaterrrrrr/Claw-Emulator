@@ -2,6 +2,8 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <exception>
+
 #include "common/common_paths.h"
 #include "common/file_util.h"
 #include "common/scm_rev.h"
@@ -59,8 +61,11 @@ static VideoCore::DiskResourceLoadCallback MakeThrottledCallback(
 void ShaderDiskCache::Init(const std::atomic_bool& stop_loading,
                            const VideoCore::DiskResourceLoadCallback& callback) {
 
-    if (!Settings::values.use_disk_shader_cache)
+    loaded_disk_cache_enabled = Settings::values.use_disk_shader_cache.GetValue();
+    if (!loaded_disk_cache_enabled) {
+        if (!stop_loading) loaded_profile = parent.profile;
         return;
+    }
 
     auto new_callback = MakeThrottledCallback(callback);
 
@@ -76,6 +81,8 @@ void ShaderDiskCache::Init(const std::atomic_bool& stop_loading,
     if (!stop_loading && !InitPLCache(stop_loading, new_callback)) {
         RecreateCache(pl_cache, CacheFileType::PL_CACHE);
     }
+    tev_warmup_configs.clear();
+    if (!stop_loading) loaded_profile = parent.profile;
 }
 
 std::optional<std::pair<u64, Shader* const>> ShaderDiskCache::UseProgrammableVertexShader(
@@ -147,9 +154,8 @@ std::optional<std::pair<u64, Shader* const>> ShaderDiskCache::UseProgrammableVer
 }
 
 std::optional<std::pair<u64, Shader* const>> ShaderDiskCache::UseFragmentShader(
-    const Pica::RegsInternal& regs, const Pica::Shader::UserConfig& user) {
+    const FSConfig& fs_config, const Pica::Shader::UserConfig& user) {
 
-    const FSConfig fs_config{regs};
     const auto fs_config_hash = fs_config.Hash();
     const auto [it, new_shader] = fragment_shaders.try_emplace(fs_config_hash, parent.instance);
     auto& shader = it->second;
@@ -274,6 +280,114 @@ GraphicsPipeline* ShaderDiskCache::GetPipeline(const PipelineInfo& info) {
     }
 
     return it.value().get();
+}
+
+static std::optional<u64> PrepareTevPipelineInfo(PipelineInfo& info, FSConfig& config,
+                                                 const Instance& instance) {
+    using TextureType = Pica::TexturingRegs::TextureConfig::TextureType;
+    if (config.framebuffer.shadow_rendering ||
+        config.texture.texture0_type == TextureType::Shadow2D ||
+        config.texture.texture0_type == TextureType::ShadowCube ||
+        config.texture.fog_mode == Pica::TexturingRegs::FogMode::Gas) {
+        return std::nullopt;
+    }
+
+    // These fields come from the per-draw push constants. Keep every other
+    // shader setting and the complete vertex/fixed state in the key.
+    config.texture.tev_stages = {};
+    config.texture.combiner_buffer_input.Assign(0);
+    config.framebuffer.alpha_test_func.Assign(Pica::FramebufferRegs::CompareFunc::Always);
+    info.state.shader_ids[ProgramType::FS] = config.Hash();
+    return info.state.OptimizedHash(instance);
+}
+
+GraphicsPipeline* ShaderDiskCache::FindTevPipeline(PipelineInfo info, FSConfig config) {
+    const auto pipeline_id = PrepareTevPipelineInfo(info, config, parent.instance);
+    if (!pipeline_id) {
+        return nullptr;
+    }
+    if (const auto it = tev_pipelines.find(*pipeline_id); it != tev_pipelines.end()) {
+        return it->second.get();
+    }
+    return nullptr;
+}
+
+void ShaderDiskCache::DeferTevWarmup(PipelineInfo info, FSConfig config,
+                                     std::array<Shader*, 3> shaders) {
+    // Pending descriptors own no driver work and share the per-title limit.
+    if (known_tev_pipelines.size() >= max_tev_pipelines) {
+        return;
+    }
+    const auto pipeline_id = PrepareTevPipelineInfo(info, config, parent.instance);
+    if (pipeline_id && known_tev_pipelines.insert(*pipeline_id).second) {
+        tev_warmups.push_back(TevWarmup{*pipeline_id, info, config, shaders});
+    }
+}
+
+void ShaderDiskCache::DeferSpecialization(GraphicsPipeline* pipeline) {
+    if (known_deferred_specializations.insert(pipeline).second) {
+        deferred_specializations.push_back(pipeline);
+    }
+}
+
+void ShaderDiskCache::PumpBackgroundPipelines() {
+    if (!deferred_specializations.empty()) {
+        auto* pipeline = deferred_specializations.front();
+        if (pipeline->QueueBackgroundBuild()) {
+            known_deferred_specializations.erase(pipeline);
+            deferred_specializations.pop_front();
+        }
+    }
+    if (tev_warmups.empty()) {
+        return;
+    }
+
+    const auto& warmup = tev_warmups.front();
+    const auto existing = tev_pipelines.find(warmup.pipeline_id);
+    auto* pipeline = existing != tev_pipelines.end() ? existing->second.get()
+                                                     : CreateTevPipeline(warmup);
+    if (pipeline && pipeline->QueueBackgroundBuild()) {
+        tev_warmups.pop_front();
+    }
+}
+
+GraphicsPipeline* ShaderDiskCache::CreateTevPipeline(const TevWarmup& warmup) {
+    const auto shader_id = warmup.info.state.shader_ids[ProgramType::FS];
+    auto [shader_it, new_shader] = tev_fragment_shaders.try_emplace(shader_id, parent.instance);
+    auto& shader = shader_it->second;
+    if (new_shader) {
+        const auto job = parent.shader_workers.QueueWork(
+            [&shader, config = warmup.config, profile = parent.profile,
+             device = parent.instance.GetDevice()] {
+                try {
+                    const auto code = GLSL::GenerateTevUbershader(config, profile);
+                    const auto spirv = CompileGLSL(code, vk::ShaderStageFlagBits::eFragment);
+                    if (!spirv.empty()) {
+                        shader.module = CompileSPV(spirv, device);
+                    }
+                } catch (const std::exception& error) {
+                    LOG_WARNING(Render_Vulkan, "Optional TEV shader build failed: {}", error.what());
+                }
+                shader.MarkDone();
+            }, Common::WorkPriority::Background);
+        if (!job) {
+            tev_fragment_shaders.erase(shader_it);
+            return nullptr;
+        }
+    }
+    auto shaders = warmup.shaders;
+    shaders[ProgramType::FS] = &shader;
+    if (!parent.instance.UseGeometryShaders() || parent.instance.IsFragmentShaderBarycentricSupported()) {
+        shaders[ProgramType::GS] = nullptr;
+    }
+
+    auto pipeline = std::make_unique<GraphicsPipeline>(
+        // Use the same driver cache saved at the drained pause/teardown boundary.
+        parent.instance, parent.renderpass_cache, warmup.info, *parent.driver_pipeline_cache,
+        *parent.pipeline_layout, shaders, &parent.pipeline_workers, true);
+    auto* result = pipeline.get();
+    tev_pipelines.emplace(warmup.pipeline_id, std::move(pipeline));
+    return result;
 }
 
 ShaderDiskCache::SourceFileCacheVersionHash ShaderDiskCache::GetSourceFileCacheVersionHash() {
@@ -1031,7 +1145,8 @@ bool ShaderDiskCache::InitFSCache(const std::atomic_bool& stop_loading,
 
         LOG_DEBUG(Render_Vulkan, "Linking {:016X}.", offset.first);
 
-        if (fragment_shaders.find(offset.first) != fragment_shaders.end()) {
+        const bool compiled = fragment_shaders.find(offset.first) != fragment_shaders.end();
+        if (compiled && !parent.use_tev_ubershader) {
             // SPIRV of config was already compiled, no need to regenerate
             // it from the cache. This can only happen if we are not regenerating
             // the cache.
@@ -1039,21 +1154,28 @@ bool ShaderDiskCache::InitFSCache(const std::atomic_bool& stop_loading,
             continue;
         }
 
-        // Cached SPIRV not found, need to recompile. Should only happen if
-        // we are regenerating the cache.
-
         curr = fs_cache.ReadAt(offset.second);
         const FSConfigEntry* entry;
 
         if (!curr.Valid() || curr.Type() != CacheEntryType::FS_CONFIG ||
             !(entry = curr.Payload<FSConfigEntry>()) ||
             entry->version != FSConfigEntry::EXPECTED_VERSION) {
+            if (compiled) {
+                // The specialized SPIR-V is usable even if it cannot seed a fallback.
+                continue;
+            }
             MALFORMED_DISK_CACHE;
         }
 
         const auto fs_config_hash = entry->fs_config.Hash();
         if (curr.Id() != fs_config_hash) {
             LOG_ERROR(Render_Vulkan, "Unexpected FSConfig hash mismatch");
+            continue;
+        }
+        if (parent.use_tev_ubershader) {
+            tev_warmup_configs.try_emplace(fs_config_hash, entry->fs_config);
+        }
+        if (compiled) {
             continue;
         }
 
@@ -1334,7 +1456,15 @@ bool ShaderDiskCache::InitGSCache(const std::atomic_bool& stop_loading,
 bool ShaderDiskCache::InitPLCache(const std::atomic_bool& stop_loading,
                                   const VideoCore::DiskResourceLoadCallback& callback) {
 
-    auto cleanup_on_error = [&]() { graphics_pipelines.clear(); };
+    auto cleanup_on_error = [&]() {
+        // A later malformed entry or cancellation can follow queued builds.
+        // Those jobs capture GraphicsPipeline::this and must finish first.
+        parent.WaitShaderResources();
+        graphics_pipelines.clear();
+        tev_pipelines.clear();
+        known_tev_pipelines.clear();
+        tev_warmups.clear();
+    };
 
     LOG_INFO(Render_Vulkan, "Loading PL disk shader cache for title {:016X}", title_id);
 
@@ -1371,6 +1501,7 @@ bool ShaderDiskCache::InitPLCache(const std::atomic_bool& stop_loading,
 
     // There is only one entry type in the pipeline info cache,
     // no need to keep track of anything.
+    const bool defer_pipeline_builds = parent.instance.IsMoltenVK();
     for (u32 i = 1; i < tot_entries; i++) {
         if (stop_loading) {
             cleanup_on_error();
@@ -1400,6 +1531,11 @@ bool ShaderDiskCache::InitPLCache(const std::atomic_bool& stop_loading,
             }
 
             known_graphic_pipelines.emplace(curr.Id());
+            const auto warm = tev_warmup_configs.find(entry->pl_info.shader_ids[ProgramType::FS]);
+            if (defer_pipeline_builds &&
+                (warm == tev_warmup_configs.end() || known_tev_pipelines.size() >= max_tev_pipelines)) {
+                continue;
+            }
             auto pl_hash_opt = entry->pl_info.OptimizedHash(parent.instance);
 
             if (graphics_pipelines.find(pl_hash_opt) != graphics_pipelines.end()) {
@@ -1457,6 +1593,13 @@ bool ShaderDiskCache::InitPLCache(const std::atomic_bool& stop_loading,
             // The dynamic state can be left default initialized.
             PipelineInfo info{};
             info.state = entry->pl_info;
+
+            // MoltenVK builds specialized pipelines when a draw uses them.
+            // Retain only bounded TEV descriptors for later prewarming.
+            if (defer_pipeline_builds) {
+                DeferTevWarmup(info, warm->second, shaders);
+                continue;
+            }
 
             auto [it_pl, _] = graphics_pipelines.try_emplace(pl_hash_opt);
             it_pl.value() = std::make_unique<GraphicsPipeline>(

@@ -3,6 +3,7 @@
 // Refer to the license.txt file included.
 
 #include "video_core/shader/generator/glsl_fs_shader_gen.h"
+#include "video_core/host_shaders/vulkan_tev_uber.h"
 
 namespace Pica::Shader::Generator::GLSL {
 
@@ -102,8 +103,8 @@ layout (binding = 2, std140) uniform fs_data {
 )";
 
 FragmentModule::FragmentModule(const FSConfig& config_, const UserConfig& user_,
-                               const Profile& profile_)
-    : config{config_}, user{user_}, profile{profile_} {
+                               const Profile& profile_, bool dynamic_tev_)
+    : config{config_}, user{user_}, profile{profile_}, dynamic_tev{dynamic_tev_} {
     config.ApplyProfile(profile_);
     out.reserve(RESERVE_SIZE);
     DefineExtensions();
@@ -120,6 +121,9 @@ FragmentModule::FragmentModule(const FSConfig& config_, const UserConfig& user_,
     for (u32 i = 0; i < 4; i++) {
         DefineTexUnitSampler(i);
     }
+    if (dynamic_tev) {
+        out += HostShaders::VULKAN_TEV_UBER;
+    }
 }
 
 FragmentModule::~FragmentModule() = default;
@@ -135,9 +139,12 @@ vec4 secondary_fragment_color = vec4(0.0);
 )";
 
     // Do not do any sort of processing if it's obvious we're not going to pass the alpha test
-    if (config.framebuffer.alpha_test_func == FramebufferRegs::CompareFunc::Never) {
+    if (!dynamic_tev && config.framebuffer.alpha_test_func == FramebufferRegs::CompareFunc::Never) {
         out += "discard; }";
         return out;
+    }
+    if (dynamic_tev) {
+        out += "if (tev_control.y == 0u) discard;\n";
     }
 
     // Append the scissor and depth tests
@@ -147,25 +154,29 @@ vec4 secondary_fragment_color = vec4(0.0);
     // Write shader source to emulate all enabled PICA lights
     WriteLighting();
 
-    out += "vec4 combiner_buffer = vec4(0.0);\n"
-           "vec4 next_combiner_buffer = tev_combiner_buffer_color;\n"
-           "vec4 combiner_output = vec4(0.0);\n";
+    if (dynamic_tev) {
+        out += "vec4 combiner_output = run_tev(rounded_primary_color, primary_fragment_color, "
+               "secondary_fragment_color);\n"
+               "if (!tev_passes_alpha(combiner_output.a)) discard;\n";
+    } else {
+        out += "vec4 combiner_buffer = vec4(0.0);\n"
+               "vec4 next_combiner_buffer = tev_combiner_buffer_color;\n"
+               "vec4 combiner_output = vec4(0.0);\n";
 
-    out += "vec3 color_results_1 = vec3(0.0);\n"
-           "vec3 color_results_2 = vec3(0.0);\n"
-           "vec3 color_results_3 = vec3(0.0);\n";
+        out += "vec3 color_results_1 = vec3(0.0);\n"
+               "vec3 color_results_2 = vec3(0.0);\n"
+               "vec3 color_results_3 = vec3(0.0);\n";
 
-    out += "float alpha_results_1 = 0.0;\n"
-           "float alpha_results_2 = 0.0;\n"
-           "float alpha_results_3 = 0.0;\n";
+        out += "float alpha_results_1 = 0.0;\n"
+               "float alpha_results_2 = 0.0;\n"
+               "float alpha_results_3 = 0.0;\n";
 
-    // Write shader source to emulate PICA TEV stages
-    for (u32 index = 0; index < config.texture.tev_stages.size(); index++) {
-        WriteTevStage(index);
+        for (u32 index = 0; index < config.texture.tev_stages.size(); index++) {
+            WriteTevStage(index);
+        }
+
+        WriteAlphaTestCondition(config.framebuffer.alpha_test_func);
     }
-
-    // Append the alpha test condition
-    WriteAlphaTestCondition(config.framebuffer.alpha_test_func);
 
     // Emulate the fog
     switch (config.texture.fog_mode) {
@@ -1765,6 +1776,11 @@ std::string GenerateFragmentShader(const FSConfig& config, const UserConfig& use
                                    const Profile& profile) {
     FragmentModule module{config, user, profile};
     return module.Generate();
+}
+
+std::string GenerateTevUbershader(const FSConfig& config, const Profile& profile) {
+    const UserConfig user{};
+    return FragmentModule{config, user, profile, true}.Generate();
 }
 
 } // namespace Pica::Shader::Generator::GLSL

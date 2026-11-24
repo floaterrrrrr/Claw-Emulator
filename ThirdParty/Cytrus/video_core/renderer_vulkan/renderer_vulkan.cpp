@@ -251,7 +251,7 @@ void RendererVulkan::PrepareDraw(Frame* frame, const Layout::FramebufferLayout& 
             .renderArea =
                 vk::Rect2D{
                     .offset = {0, 0},
-                    .extent = {frame->width, frame->height},
+                    .extent = scissor.extent,
                 },
             .clearValueCount = 1,
             .pClearValues = &clear,
@@ -270,36 +270,46 @@ void RendererVulkan::PrepareDraw(Frame* frame, const Layout::FramebufferLayout& 
 Frame* RendererVulkan::PrepareWindowFrame(PresentWindow& window,
                                          const Layout::FramebufferLayout& output_layout, bool flipped) {
 #if CLAW_ENABLE_METALFX
-    auto layout = window.RenderLayout(output_layout);
+    const auto target = window.RenderLayout(output_layout);
 #else
-    auto layout = output_layout;
+    const auto& target = output_layout;
 #endif
-    const bool thermal_limited = Claw::MobileThermallyLimited();
-    if (thermal_limited) {
-        const auto scale = Claw::ThermalRenderScale(1, Claw::mobile_base_presentation_scale.load(),
-            Claw::mobile_applied_thermal_state.load(std::memory_order_relaxed));
-        const auto base = std::max(1, Claw::mobile_base_presentation_scale.load());
-        layout = Layout::SingleFrameLayout(output_layout.width * scale / base,
-            output_layout.height * scale / base, output_layout.bottom_screen_enabled, false);
+    auto layout = target;
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+    const int heat = Claw::mobile_applied_thermal_state.load(std::memory_order_relaxed);
+    const int base = std::max(1, Claw::mobile_base_presentation_scale.load());
+    const int scale = Claw::ThermalPresentationScale(base, base, window.SupportsScaledPresent(), heat);
+    const u32 width = output_layout.width * scale / base;
+    const u32 height = output_layout.height * scale / base;
+    if (width < target.width || height < target.height) {
+        layout = Layout::SingleFrameLayout(width, height, output_layout.bottom_screen_enabled, false);
     }
+#endif
     if (!Settings::values.use_skip_duplicate_frames.GetValue() ||
         Core::PerfStats::game_frames_updated || frame_source_changed ||
         Claw::restore_presentation.AwaitingFrames()) {
         Frame* frame = window.GetRenderFrame();
 
-        if (layout.width != frame->width || layout.height != frame->height ||
-            frame->thermal_limited != thermal_limited) {
+        if (target.width != frame->width || target.height != frame->height) {
             window.WaitPresent();
             scheduler.Finish();
-            window.RecreateFrame(frame, layout.width, layout.height);
+            window.RecreateFrame(frame, target.width, target.height);
         }
+        // Only the rendered region changes with heat. Keep the framebuffer,
+        // its MetalFX textures, and the presentation pipeline ready for recovery.
+        frame->rendered_width = layout.width;
+        frame->rendered_height = layout.height;
 
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+        DrawScreens(frame, layout, flipped, Claw::mobile_oled_vivid.load(std::memory_order_relaxed));
+#else
         clear_color.float32[0] = Settings::values.bg_red.GetValue();
         clear_color.float32[1] = Settings::values.bg_green.GetValue();
         clear_color.float32[2] = Settings::values.bg_blue.GetValue();
         clear_color.float32[3] = 1.0f;
 
         DrawScreens(frame, layout, flipped);
+#endif
         const auto& top_fb = pica.regs.framebuffer_config[0];
         const PAddr top_address = top_fb.active_fb == 0 ? top_fb.address_left1 : top_fb.address_left2;
         const bool top_source_ready = pica.regs_lcd.color_fill_top.is_enabled ||
@@ -1070,12 +1080,16 @@ void RendererVulkan::DrawBottomScreen(const Layout::FramebufferLayout& layout,
 }
 
 void RendererVulkan::DrawScreens(Frame* frame, const Layout::FramebufferLayout& layout,
-                                 bool flipped) {
+                                 bool flipped, bool oled_vivid) {
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+    clear_color = vk::ClearColorValue{.float32 = std::array{0.0f, 0.0f, 0.0f, 1.0f}};
+#else
     if (settings.bg_color_update_requested.exchange(false)) {
         clear_color.float32[0] = Settings::values.bg_red.GetValue();
         clear_color.float32[1] = Settings::values.bg_green.GetValue();
         clear_color.float32[2] = Settings::values.bg_blue.GetValue();
     }
+#endif
     if (settings.shader_update_requested.exchange(false)) {
         ReloadPipeline(layout.render_3d_mode);
     }
@@ -1085,6 +1099,7 @@ void RendererVulkan::DrawScreens(Frame* frame, const Layout::FramebufferLayout& 
     const auto& top_screen = layout.top_screen;
     const auto& bottom_screen = layout.bottom_screen;
     draw_info.modelview = MakeOrthographicMatrix(layout.width, layout.height);
+    draw_info.oled_vivid = oled_vivid;
 
     draw_info.layer = 0;
 
@@ -1191,10 +1206,11 @@ void RendererVulkan::SwapBuffers() {
     system.perf_stats->StartSwap();
     screenRendered = false;
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
-    const bool critical_heat = Claw::mobile_applied_thermal_state.load(std::memory_order_relaxed) >= 3;
-    if (Settings::values.frame_limit.GetValue() == 400.0 || critical_heat) {
+    const int heat = Claw::mobile_applied_thermal_state.load(std::memory_order_relaxed);
+    const int presentation_fps = Claw::ThermalPresentationFPS(heat);
+    if (Settings::values.frame_limit.GetValue() == 400.0 || presentation_fps < 60) {
         if (!fast_forward_present.Due(Claw::FastForwardPresentation::Clock::now(),
-                                      IsScreenshotPending(), critical_heat ? 30 : 60)) {
+                                      IsScreenshotPending(), presentation_fps)) {
             // Omit only the intermediate host presentation. Submit all guest
             // GPU commands without a device-completion wait, keep cache/timing
             // bookkeeping, and acquire/reset no presentation slots or fences.
@@ -1247,6 +1263,9 @@ void RendererVulkan::SwapBuffers() {
         std::copy(fields.begin(), fields.end(), frame_source.begin() + 2 + fb_id * fields.size());
     }
     frame_source_changed = !frame_source_presented || frame_source != presented_frame_source;
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+    frame_source_changed |= heat != presented_thermal_state;
+#endif
     RenderScreenshot();
     isSecondaryWindow = false;
     Frame* main_frame = PrepareWindowFrame(main_present_window, layout, false);
@@ -1330,15 +1349,17 @@ void RendererVulkan::SwapBuffers() {
     // block on display timing. Present() retains all existing fence/queue rules;
     // no new worker or extra frames in flight are introduced.
 #if CLAW_ENABLE_METALFX
-    // Commit both MetalFX encoders before drawable acquisition can block. Each
-    // command waits for its own render tick and signals its own completion event.
+    // Queue the top scaler before drawable acquisition can block. The bottom
+    // window presents its ordinary filtered image through the same fence path.
     if (main_frame) main_present_window.PrepareUpscale(main_frame);
-    if (secondary_frame) secondary_present_window_ptr->PrepareUpscale(secondary_frame);
 #endif
     if (main_frame) {
         main_present_window.Present(main_frame);
         presented_frame_source = frame_source;
         frame_source_presented = true;
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+        presented_thermal_state = heat;
+#endif
     }
     if (secondary_frame) {
         secondary_present_window_ptr->Present(secondary_frame);
@@ -1355,6 +1376,11 @@ void RendererVulkan::SwapBuffers() {
 
     system.perf_stats->EndSwap();
     rasterizer.TickFrame();
+#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+    rasterizer.PumpBackgroundPipelines(Claw::restore_presentation.HasCompletedFrame());
+#else
+    rasterizer.PumpBackgroundPipelines(main_frame != nullptr);
+#endif
     EndFrame();
 }
 
@@ -1714,6 +1740,7 @@ void RendererVulkan::InvalidatePresentationCache() {
 }
 
 void RendererVulkan::PrepareStateRestore() {
+    rasterizer.BeginBlockingPipelineLoad();
     rasterizer.WaitBackgroundDiskResources();
     rasterizer.WaitShaderResources();
     scheduler.Finish();

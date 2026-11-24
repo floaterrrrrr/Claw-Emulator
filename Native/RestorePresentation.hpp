@@ -19,6 +19,7 @@ public:
         if (token != 0 && token == Generation() && warmed.load()) completed.fetch_add(1);
     }
     bool AwaitingFrames() const { return Generation() != 0 && completed.load() < 5; }
+    bool HasCompletedFrame() const { return Generation() != 0 && completed.load() != 0; }
     bool BypassScaler() const { return Generation() != 0 && completed.load() < 3; }
     bool Ready() const { return Generation() != 0 && warmed.load() && completed.load() >= 5; }
     void Reset() { Begin(); }

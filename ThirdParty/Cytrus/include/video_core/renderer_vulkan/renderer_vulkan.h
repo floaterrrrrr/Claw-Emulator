@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include "common/common_types.h"
 #include "common/math_util.h"
 #include "video_core/renderer_base.h"
@@ -61,7 +62,7 @@ struct ScreenInfo {
     vk::ImageView image_view;
 };
 
-struct PresentUniformData {
+struct alignas(16) PresentUniformData {
     std::array<f32, 4 * 4> modelview;
     Common::Vec4f i_resolution;
     Common::Vec4f o_resolution;
@@ -69,8 +70,9 @@ struct PresentUniformData {
     int screen_id_r = 0;
     int layer = 0;
     int reverse_interlaced = 0;
+    int oled_vivid = 0;
 };
-static_assert(sizeof(PresentUniformData) == 112,
+static_assert(offsetof(PresentUniformData, oled_vivid) == 112 && sizeof(PresentUniformData) == 128,
               "PresentUniformData does not structure in shader!");
 
 class RendererVulkan : public VideoCore::RendererBase {
@@ -112,7 +114,8 @@ private:
     Frame* PrepareWindowFrame(PresentWindow& window, const Layout::FramebufferLayout& layout,
                               bool flipped);
 
-    void DrawScreens(Frame* frame, const Layout::FramebufferLayout& layout, bool flipped);
+    void DrawScreens(Frame* frame, const Layout::FramebufferLayout& layout, bool flipped,
+                     bool oled_vivid = false);
     void DrawBottomScreen(const Layout::FramebufferLayout& layout,
                           const Common::Rectangle<u32>& bottom_screen);
 
@@ -172,6 +175,7 @@ private:
     bool frame_source_presented = false;
     bool frame_source_changed = false;
 #if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE
+    int presented_thermal_state{};
     Claw::FastForwardPresentation fast_forward_present;
     Claw::BottomPresentationGate bottom_presentation_gate;
     vk::ImageView last_bottom_view{};

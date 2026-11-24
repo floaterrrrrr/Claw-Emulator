@@ -37,27 +37,49 @@ static std::string restore(const std::string& bytes, bool legacy = false) {
     return path;
 }
 
+static std::string capture_open_file(const std::string& path) {
+    FileUtil::IOFile file(path, "r+b");
+    assert(file.IsOpen() && file.Seek(9, SEEK_SET));
+    std::ostringstream stream(std::ios::binary);
+    {
+        oarchive archive(stream);
+        archive & file;
+    }
+    return stream.str();
+}
+
 int main(int argc, char** argv) {
     assert(argc == 2);
     namespace fs = std::filesystem;
     const fs::path root(argv[1]);
-    const std::string oldRoot = (root / "old/Documents/EmulationData").string() + "/";
-    const std::string newRoot = (root / "new/Documents/EmulationData").string() + "/";
+    const auto containers = root / "Containers/Data/Application";
+    const auto old_container = containers / "043CB7FD-A2E7-4857-9EC4-204EC9825923";
+    const auto new_container = containers / "F3C4D7AE-B68F-4266-9F3B-BD52DF96CCD1";
+    const std::string oldRoot = (old_container / "Documents/EmulationData").generic_string() + "/";
+    const std::string newRoot = (new_container / "Documents/EmulationData").generic_string() + "/";
     const std::string title = "sdmc/Nintendo 3DS/id0/id1/title/00040000/000edf00/data/";
     const std::string mount = title + "00000001/";
     fs::create_directories(oldRoot + mount);
     std::ofstream(oldRoot + mount + "save.bin") << "existing progress";
     std::ofstream(oldRoot + title + "00000001.metadata") << "format metadata!";
+    const auto old_filename = oldRoot + mount + "save.bin";
+    // A non-container root leaves the absolute filename in the real IOFile
+    // serializer, producing the same filename field as a legacy save state.
+    FileUtil::SetUserPath((root / "other").generic_string() + "/");
+    const auto legacy_file = capture_open_file(old_filename);
+    assert(legacy_file.find(old_filename) != std::string::npos);
     FileUtil::SetUserPath(oldRoot);
     const auto legacy = capture(oldRoot + mount, true);
     const auto portable = capture(oldRoot + mount, false);
+    const auto portable_file = capture_open_file(old_filename);
     assert(portable.find(oldRoot) == std::string::npos);
+    assert(portable_file.find("%CITRA_USER_DIR%" + mount + "save.bin") != std::string::npos);
     assert(restore(portable) == oldRoot + mount);
     assert(restore(legacy) == oldRoot + mount);
 
     // Move the data exactly as a sandbox migration would. With the previous
     // raw-string loader the state still points at a nonexistent save archive.
-    fs::rename(root / "old", root / "new");
+    fs::rename(old_container, new_container);
     FileUtil::SetUserPath(newRoot);
     assert(!fs::exists(restore(legacy, true)));
     for (const auto& bytes : {legacy, portable}) {
@@ -68,6 +90,19 @@ int main(int argc, char** argv) {
         assert(file.IsOpen() && file.ReadBytes(contents, sizeof(contents)) == sizeof(contents));
         assert(std::string(contents, sizeof(contents)) == "existing progress");
         assert(fs::file_size(newRoot + title + "00000001.metadata") == 16);
+    }
+
+    const auto new_filename = newRoot + mount + "save.bin";
+    for (const auto& bytes : {legacy_file, portable_file}) {
+        std::istringstream stream(bytes, std::ios::binary);
+        iarchive archive(stream);
+        FileUtil::IOFile file;
+        archive & file;
+        assert(file.Filename() == new_filename && file.IsOpen() && file.Tell() == 9);
+        assert(file.WriteString("progress!") == 9 && file.Flush());
+        std::string contents;
+        assert(FileUtil::ReadFileToString(false, new_filename, contents) == 18);
+        assert(contents == "existing progress!");
     }
 
     // Both already-open archives and the factories that reopen them must
@@ -81,6 +116,7 @@ int main(int argc, char** argv) {
     assert(FileUtil::RestoreArchivePath("%CITRA_USER_SDMC%Nintendo 3DS/") ==
            newRoot + "sdmc/Nintendo 3DS/");
     assert(FileUtil::RestoreArchivePath("%CITRA_USER_NAND%data/") == newRoot + "nand/data/");
+    assert(FileUtil::RestoreArchivePath("/old/Documents/EmulationData/sdmc/") == newRoot + "sdmc/");
     for (const std::string unchanged : {"", "/custom/sdmc/", "relative/Documents/EmulationData/sdmc/",
                                        "/old/Documents/EmulationData/sdmc-other/",
                                        "/old/Documents/EmulationData/sdmc/../other/",
@@ -92,6 +128,6 @@ int main(int argc, char** argv) {
     // A missing save stays missing. Restoration must never format or invent it.
     const auto missing = restore(capture(oldRoot + "sdmc/missing/", true));
     assert(missing == newRoot + "sdmc/missing/" && !fs::exists(missing));
-    std::cout << "PASS: legacy and portable state paths reopen preserved saves after a sandbox move; "
-                 "binary layout, SD/NAND roots, unrelated paths and missing saves\n";
+    std::cout << "PASS: legacy and portable archive paths and open save files after a sandbox move; "
+                 "binary layout, writable handles, SD/NAND roots and missing saves\n";
 }

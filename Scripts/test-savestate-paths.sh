@@ -3,6 +3,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 task_paths_dir="$(mktemp -d)"
 trap 'rm -rf "$task_paths_dir"' EXIT
+"${CXX:-c++}" -std=c++20 -O2 -Wall -Wextra -Werror \
+    -IThirdParty/Cytrus/include Tests/ios_container_path_tests.cpp -o "$task_paths_dir/ios-paths"
+"$task_paths_dir/ios-paths"
+if [[ "${1:-}" == --portable-only ]]; then exit 0; fi
+
 task_boost_root="${CLAW_TEST_BOOST_ROOT:-}"
 task_fmt_root="${CLAW_TEST_FMT_ROOT:-}"
 if [[ -z "$task_boost_root" ]]; then
@@ -35,6 +40,7 @@ if [[ "$(uname -s)" == Darwin ]]; then task_platform=(-framework CoreFoundation)
 #include "common/archives.h"
 #include "core/file_sys/archive_extsavedata.h"
 #include "core/file_sys/archive_nand.h"
+#include "core/file_sys/archive_savedata.h"
 #include "core/file_sys/archive_sdmc.h"
 #include "core/file_sys/archive_sdmcwriteonly.h"
 #include "core/file_sys/archive_source_sd_savedata.h"
@@ -43,6 +49,7 @@ if [[ "$(uname -s)" == Darwin ]]; then task_platform=(-framework CoreFoundation)
 SERIALIZE_IMPL(FileSys::ArchiveFactory_ExtSaveData)
 SERIALIZE_IMPL(FileSys::NANDArchive)
 SERIALIZE_IMPL(FileSys::ArchiveFactory_NAND)
+SERIALIZE_IMPL(FileSys::ArchiveFactory_SaveData)
 SERIALIZE_IMPL(FileSys::SDMCArchive)
 SERIALIZE_IMPL(FileSys::ArchiveFactory_SDMC)
 SERIALIZE_IMPL(FileSys::ArchiveFactory_SDMCWriteOnly)

@@ -32,10 +32,12 @@ std::shared_ptr<SpatialUpscaleConfig> GetSpatialUpscaleConfig() {
     std::lock_guard lock{current_mutex};
     return current;
 }
-int SpatialUpscaleInputScale() {
-    if (MobileThermallyLimited()) return 0;
+int SpatialUpscaleConfiguredInputScale() {
     const auto config = GetSpatialUpscaleConfig();
     return config && !config->failed.load() ? config->input_scale : 0;
+}
+int SpatialUpscaleInputScale() {
+    return MobileThermallyLimited() ? 0 : SpatialUpscaleConfiguredInputScale();
 }
 int SpatialUpscaleStatus() {
     if (MobileThermallyLimited()) return 0; // Temporarily bypassed, not failed.

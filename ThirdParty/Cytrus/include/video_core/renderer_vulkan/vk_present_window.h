@@ -36,7 +36,9 @@ struct Frame {
     vk::Semaphore render_ready;
     vk::Fence present_done;
     vk::CommandBuffer cmdbuf;
-    bool thermal_limited{};
+    // Active render area inside the reusable image and framebuffer.
+    u32 rendered_width{};
+    u32 rendered_height{};
     u64 presentation_generation{};
 #if CLAW_ENABLE_METALFX
     std::unique_ptr<Claw::MetalFXFrame> metalfx;
@@ -62,6 +64,8 @@ public:
 
     /// Queues the provided frame for presentation.
     void Present(Frame* frame);
+
+    bool SupportsScaledPresent() const noexcept { return blit_supported; }
 
 #if CLAW_ENABLE_METALFX
     Layout::FramebufferLayout RenderLayout(const Layout::FramebufferLayout& output) const;
@@ -115,6 +119,7 @@ private:
     std::jthread present_thread;
     bool vsync_enabled{};
     bool blit_supported;
+    bool linear_blit_supported;
     bool use_present_thread{true};
     void* last_render_surface{};
 #if CLAW_ENABLE_METALFX

@@ -8,6 +8,7 @@
 
 #include "video_core/rasterizer_interface.h"
 #include "video_core/renderer_vulkan/vk_graphics_pipeline.h"
+#include "video_core/renderer_vulkan/pipeline_worker_policy.h"
 #include "video_core/renderer_vulkan/vk_resource_pool.h"
 #include "video_core/renderer_vulkan/vk_shader_disk_cache.h"
 #include "video_core/shader/generator/pica_fs_config.h"
@@ -44,6 +45,8 @@ public:
     explicit PipelineCache(const Instance& instance, Scheduler& scheduler,
                            RenderManager& renderpass_cache, DescriptorUpdateQueue& update_queue);
     ~PipelineCache();
+    void BeginBlockingLoad();
+    void PumpBackgroundPipelines(bool presentation_completed);
     void WaitShaderResources() {
         shader_workers.WaitForRequests();
         pipeline_workers.WaitForRequests();
@@ -120,8 +123,9 @@ private:
     void SaveDriverPipelineDiskCache();
 
     /// Loads the shader disk cache
-    void LoadDiskCache(const std::atomic_bool& stop_loading = std::atomic_bool{false},
-                       const VideoCore::DiskResourceLoadCallback& callback = {});
+    void LoadDiskCache(const std::atomic_bool& stop_loading,
+                       const VideoCore::DiskResourceLoadCallback& callback,
+                       bool can_reuse);
 
     /// Switches the disk cache at runtime to use a different title ID
     void SwitchDiskCache(u64 title_id, const std::atomic_bool& stop_loading,
@@ -152,14 +156,18 @@ private:
     RenderManager& renderpass_cache;
     DescriptorUpdateQueue& update_queue;
 
+    const bool use_tev_ubershader;
     Pica::Shader::Profile profile{};
     vk::UniquePipelineCache driver_pipeline_cache;
     vk::UniquePipelineLayout pipeline_layout;
     std::size_t num_worker_threads;
     Common::ThreadWorker pipeline_workers;
     Common::ThreadWorker shader_workers;
+    PipelineWarmupPolicy warmup_policy;
     PipelineInfo current_info{};
     GraphicsPipeline* current_pipeline{};
+    bool current_pipeline_is_uber{};
+    std::optional<Pica::Shader::FSConfig> current_tev_config;
     std::array<DescriptorHeap, NumDescriptorHeaps> descriptor_heaps;
     std::array<vk::DescriptorSet, NumRasterizerSets> bound_descriptor_sets{};
     std::array<u32, NumDynamicOffsets> offsets{};

@@ -3,6 +3,7 @@
 // Refer to the license.txt file included.
 
 #include "video_core/renderer_vulkan/vk_texture_runtime.h"
+#include "ThreeDSPerformance.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -1602,13 +1603,10 @@ Sampler::Sampler(TextureRuntime& runtime, const VideoCore::SamplerParams& params
     const float lod_min = static_cast<float>(params.lod_min);
     const float lod_max = static_cast<float>(params.lod_max);
 
-    // Do not apply anisotropic filtering if nearest filtering is used at all, as drivers
-    // are only recommended (not enforced) to follow the mag/min filter in such cases.
-    // Adreno drivers are an example of this, as they force linear filtering when using
-    // anisotropic filtering.
-    const bool use_anisotropy = instance.IsAnisotropicFilteringSupported() &&
-                                mag_filter == vk::Filter::eLinear &&
-                                min_filter == vk::Filter::eLinear;
+    const float anisotropy = Claw::ThreeDSAnisotropy(
+        Claw::three_ds_anisotropy_enabled.load(std::memory_order_relaxed),
+        instance.IsAnisotropicFilteringSupported(), min_filter == vk::Filter::eLinear,
+        mag_filter == vk::Filter::eLinear, properties.limits.maxSamplerAnisotropy);
 
     const vk::SamplerCreateInfo sampler_info = {
         .pNext = use_border_color ? &border_color_info : nullptr,
@@ -1618,8 +1616,8 @@ Sampler::Sampler(TextureRuntime& runtime, const VideoCore::SamplerParams& params
         .addressModeU = wrap_u,
         .addressModeV = wrap_v,
         .mipLodBias = 0,
-        .anisotropyEnable = use_anisotropy,
-        .maxAnisotropy = use_anisotropy ? properties.limits.maxSamplerAnisotropy : 1.0f,
+        .anisotropyEnable = anisotropy > 1.0f,
+        .maxAnisotropy = anisotropy,
         .compareEnable = false,
         .compareOp = vk::CompareOp::eAlways,
         .minLod = lod_min,

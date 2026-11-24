@@ -25,6 +25,7 @@
 #include "common/file_util.h"
 #include "common/logging/log.h"
 #include "common/scope_exit.h"
+#include "common/serialization/ios_container_path.h"
 #include "common/string_util.h"
 
 #ifdef _WIN32
@@ -1058,9 +1059,19 @@ bool StringReplace(std::string& haystack, const std::string& a, const std::strin
 }
 
 std::string SerializePath(const std::string& input, bool is_saving) {
+    const auto& user_dir = GetUserPath(UserPath::UserDir);
+    if (is_saving && !input.empty() && input == g_currentRomPath) {
+        return "%CITRA_ROM_FILE%";
+    }
+    auto ios_path = is_saving ? StatePath::EncodeIOSPath(input, user_dir)
+                              : StatePath::DecodeIOSPath(input, user_dir);
+    if (ios_path) {
+        return std::move(*ios_path);
+    }
+
     auto result = input;
     StringReplace(result, "%CITRA_ROM_FILE%", g_currentRomPath, is_saving);
-    StringReplace(result, "%CITRA_USER_DIR%", GetUserPath(UserPath::UserDir), is_saving);
+    StringReplace(result, "%CITRA_USER_DIR%", user_dir, is_saving);
     StringReplace(result, "%CITRA_USER_SDMC%", GetUserPath(UserPath::SDMCDir), is_saving);
     StringReplace(result, "%CITRA_USER_NAND%", GetUserPath(UserPath::NANDDir), is_saving);
     return result;

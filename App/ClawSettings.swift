@@ -70,6 +70,10 @@ private struct DeviceProfileSummary: Sendable {
 
 struct ClawSettings: View {
     @AppStorage("proportionalBottomScreen") private var proportionalBottomScreen = false
+    @AppStorage("threeDSAnisotropicFiltering") private var anisotropicFiltering = true
+    @AppStorage("threeDSThermalProtection") private var thermalProtection = true
+    @AppStorage("threeDSOLEDVivid") private var oledVivid = false
+    @AppStorage("threeDSReduceShaderStutter") private var reduceShaderStutter = true
     var games: [Game] = []
     let exporting: Bool
     let onImportKeys: () -> Void
@@ -209,6 +213,20 @@ struct ClawSettings: View {
                 LabeledContent("CPU", value: DeviceProfileSummary.current.cpu)
                 LabeledContent("Recommended", value: DeviceProfileSummary.current.rendering)
             }
+            ClawSettingsSection(title: "Texture clarity", footer: "Keeps textures clearer at an angle, up to 16× when supported. Applies to 3DS games on your next launch.") {
+                Toggle("Anisotropic filtering", isOn: $anisotropicFiltering)
+                    .accessibilityIdentifier("threeDSAnisotropicFiltering")
+            }
+            ClawSettingsSection(title: "Display quality", footer: "Thermal protection lowers display quality when your device gets hot. OLED vivid boosts color and contrast. Settings apply on your next 3DS game launch.") {
+                Toggle("Thermal protection", isOn: $thermalProtection)
+                    .accessibilityIdentifier("threeDSThermalProtection")
+                Divider()
+                Toggle("OLED vivid", isOn: $oledVivid)
+                    .accessibilityIdentifier("threeDSOLEDVivid")
+                Divider()
+                Toggle("Reduce shader stutter", isOn: $reduceShaderStutter)
+                    .accessibilityIdentifier("threeDSReduceShaderStutter")
+            }
             ClawSettingsSection(title: "Resolution", footer: automatic ? "Managed by your device profile." : "MetalFX uses a 2× input to produce a 4× image.") {
                 ConsoleSegments(values: Array(1...4), selection: Binding(get: {
                     automatic ? DeviceProfileSummary.current.resolution : resolution
@@ -229,6 +247,10 @@ struct ClawSettings: View {
             Button {
                 automatic = true; resolution = Int(Claw3DSDefaultResolution())
                 metalFX = Int(Claw3DSDefaultMetalFXInput()); clock = 100
+                anisotropicFiltering = true
+                thermalProtection = true
+                oledVivid = false
+                reduceShaderStutter = true
             } label: {
                 Label("Restore recommended settings", systemImage: "arrow.counterclockwise")
                     .frame(maxWidth: .infinity)

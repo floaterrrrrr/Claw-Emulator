@@ -3,6 +3,7 @@
 // Refer to the license.txt file included.
 
 #include <boost/container/static_vector.hpp>
+#include <exception>
 
 #include "common/alignment.h"
 #include "common/hash.h"
@@ -75,34 +76,63 @@ Shader::~Shader() {
 GraphicsPipeline::GraphicsPipeline(const Instance& instance_, RenderManager& renderpass_cache_,
                                    const PipelineInfo& info_, vk::PipelineCache pipeline_cache_,
                                    vk::PipelineLayout layout_, std::array<Shader*, 3> stages_,
-                                   Common::ThreadWorker* worker_)
+                                   Common::ThreadWorker* worker_, bool optional_)
     : instance{instance_}, renderpass_cache{renderpass_cache_}, worker{worker_},
-      pipeline_layout{layout_}, pipeline_cache{pipeline_cache_}, info{info_}, stages{stages_} {}
+      pipeline_layout{layout_}, pipeline_cache{pipeline_cache_}, info{info_}, stages{stages_},
+      optional{optional_} {}
 
 GraphicsPipeline::~GraphicsPipeline() = default;
 
 bool GraphicsPipeline::TryBuild(bool wait_built) {
-    // The pipeline is currently being compiled. We can either wait for it
-    // or skip the draw.
-    if (is_pending) {
-        return wait_built;
+    if (IsDone()) {
+        return true;
+    }
+    if (pending_work) {
+        if (queued_in_background) {
+            worker->PromoteWork(pending_work);
+            queued_in_background = false;
+        }
+        return IsDone() || wait_built;
     }
 
-    // Record shader readiness for the optional cache-only driver path.
-    const bool shaders_pending = std::any_of(
-        stages.begin(), stages.end(), [](Shader* shader) { return shader && !shader->IsDone(); });
     // Ask the driver if it can give us the pipeline quickly.
     // MoltenVK builds always run on the worker, including a driver-cache hit.
-    if (!instance.IsMoltenVK() && !shaders_pending &&
+    if (!instance.IsMoltenVK() && !ShadersPending() &&
         instance.IsPipelineCreationCacheControlSupported() && Build(true)) {
         return true;
     }
 
-    // Queue once even if shaders are pending. Build waits on the separate shader
-    // pool; no repeated draw is needed to trigger compilation of this pipeline.
-    worker->QueueWork([this] { Build(); });
-    is_pending = true;
+    QueueBuild(Common::WorkPriority::Urgent);
     return IsDone() || wait_built;
+}
+
+bool GraphicsPipeline::QueueBackgroundBuild() {
+    // An optional job may hold the only MoltenVK compiler while it's running.
+    // Keep waits for unfinished shader modules out of this lane.
+    return IsDone() || pending_work ||
+           (!ShadersPending() && QueueBuild(Common::WorkPriority::Background));
+}
+
+bool GraphicsPipeline::ShadersPending() const {
+    return std::any_of(stages.begin(), stages.end(),
+                       [](Shader* shader) { return shader && !shader->IsDone(); });
+}
+
+bool GraphicsPipeline::QueueBuild(Common::WorkPriority priority) {
+    pending_work = worker->QueueWork([this] {
+        if (!optional) {
+            Build();
+            return;
+        }
+        try {
+            if (Build()) return;
+        } catch (const std::exception& error) {
+            LOG_WARNING(Render_Vulkan, "Optional TEV pipeline build failed: {}", error.what());
+        }
+        MarkDone();
+    }, priority);
+    queued_in_background = pending_work && priority == Common::WorkPriority::Background;
+    return pending_work != 0;
 }
 
 bool GraphicsPipeline::Build(bool fail_on_compile_required) {
@@ -254,6 +284,7 @@ bool GraphicsPipeline::Build(bool fail_on_compile_required) {
         }
 
         shader->WaitDone();
+        if (optional && !shader->Handle()) return false;
         shader_stages[shader_count++] = vk::PipelineShaderStageCreateInfo{
             .stage = MakeShaderStage(i),
             .module = shader->Handle(),
@@ -285,6 +316,9 @@ bool GraphicsPipeline::Build(bool fail_on_compile_required) {
     if (result.result == vk::Result::eSuccess) {
         pipeline = std::move(result.value);
     } else if (result.result == vk::Result::eErrorPipelineCompileRequiredEXT) {
+        return false;
+    } else if (optional) {
+        LOG_WARNING(Render_Vulkan, "Optional TEV pipeline creation failed: {}", vk::to_string(result.result));
         return false;
     } else {
         UNREACHABLE_MSG("Graphics pipeline creation failed!");

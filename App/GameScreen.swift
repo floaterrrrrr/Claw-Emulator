@@ -1542,11 +1542,11 @@ final class GameController: UIViewController, UIAdaptivePresentationControllerDe
         if !paused {
             if thermal >= 2 {
                 let scale = thermal >= 3 ? 1 : (resolution > 2 || upscaleInput != 0 ? 2 : 1)
-                graphics = "Thermal protection · Native \(scale)× · MetalFX bypassed" +
+                graphics = "Thermal protection · \(scale)× presentation · MetalFX bypassed" +
                     (thermal >= 3 ? " · 30 Hz display target" : "")
             } else { switch engine.metalFXStatus() {
-            case 1: graphics = "\(upscaleInput)× → 4× · MetalFX active"
-            case 2: graphics = "\(upscaleInput)× → 4× · MetalFX starting"
+            case 1: graphics = "\(upscaleInput)× → 4× · Top-screen MetalFX"
+            case 2: graphics = "\(upscaleInput)× → 4× · Top-screen MetalFX starting"
             case -1: graphics = "Native 4× · MetalFX fallback"
             default: graphics = "Native \(resolution)× · MetalFX off"
             } }

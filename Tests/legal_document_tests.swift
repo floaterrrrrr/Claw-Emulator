@@ -16,6 +16,28 @@ import Foundation
         precondition(LegalDocument.sections(unicode, limit: 3).map(\.text).joined() == unicode)
         precondition(LegalDocument.sections("").isEmpty)
         precondition(LegalDocument.sections("text", limit: 0).isEmpty)
+        let emulatorURL = directory.appendingPathComponent("RetroCoreLicenses.txt")
+        let original = try String(contentsOf: emulatorURL, encoding: .utf8)
+        let blocks = try await LegalDocumentLoader.shared.loadEmulatorLicences(emulatorURL)
+        precondition(blocks.map(\.rawText).joined() == original,
+            "Styled emulator licences must preserve every original character")
+        precondition(blocks.filter { $0.kind == .notice }.count == 88)
+        precondition(blocks.filter { $0.kind == .source }.count == 14)
+        precondition(blocks.first?.kind == .overview)
+        precondition(blocks.first(where: { $0.kind == .notice })?.title == "date / LICENSE.txt")
+        precondition(blocks.allSatisfy { $0.sections.allSatisfy { $0.text.count <= 4096 } })
+        precondition(Set(blocks.map(\.id)).count == blocks.count)
+        let cachedBlocks = try await LegalDocumentLoader.shared.loadEmulatorLicences(emulatorURL)
+        precondition(cachedBlocks.map(\.rawText) == blocks.map(\.rawText))
+        let fixture = "Intro é🇨🇦\n\nexample: https://github.com/example/project/tree/abc123\n\n"
+            + "==============\nexample / LICENSE\n==============\n" + unicode
+        let fixtureBlocks = EmulatorLicenceBlock.parse(fixture)
+        precondition(fixtureBlocks.map(\.rawText).joined() == fixture)
+        precondition(fixtureBlocks.map(\.kind) == [.overview, .source, .notice])
+        precondition(fixtureBlocks[1].url?.lastPathComponent == "abc123")
+        precondition(fixtureBlocks[2].sections.map(\.text).joined() == unicode.trimmingCharacters(in: .newlines))
+        precondition(EmulatorLicenceBlock.parse("").isEmpty)
+        precondition(EmulatorLicenceBlock.parse("Unstructured notice").first?.rawText == "Unstructured notice")
         print("PASS: complete bundled licenses, bounded text layouts, stable sections and Unicode preservation")
     }
 }

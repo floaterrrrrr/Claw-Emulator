@@ -30,9 +30,9 @@ namespace Vulkan {
 
 namespace {
 
-bool CanBlitToSwapchain(const vk::PhysicalDevice& physical_device, vk::Format format) {
-    const vk::FormatProperties props{physical_device.getFormatProperties(format)};
-    return static_cast<bool>(props.optimalTilingFeatures & vk::FormatFeatureFlagBits::eBlitDst);
+bool FormatSupports(const Instance& instance, vk::Format format, vk::FormatFeatureFlags required) {
+    const auto features = instance.GetPhysicalDevice().getFormatProperties(format).optimalTilingFeatures;
+    return (features & required) == required;
 }
 
 [[nodiscard]] vk::ImageSubresourceLayers MakeImageSubresourceLayers() {
@@ -117,8 +117,11 @@ PresentWindow::PresentWindow(Frontend::EmuWindow& emu_window_, const Instance& i
                 emu_window.GetFramebufferLayout().height, surface, low_refresh_rate_},
       graphics_queue{instance.GetGraphicsQueue()}, present_renderpass{CreateRenderpass()},
       vsync_enabled{Settings::values.use_vsync.GetValue()},
-      blit_supported{
-          CanBlitToSwapchain(instance.GetPhysicalDevice(), swapchain.GetSurfaceFormat().format)},
+      blit_supported{FormatSupports(instance, swapchain.GetSurfaceFormat().format,
+                                   vk::FormatFeatureFlagBits::eBlitSrc |
+                                       vk::FormatFeatureFlagBits::eBlitDst)},
+      linear_blit_supported{FormatSupports(instance, swapchain.GetSurfaceFormat().format,
+                                          vk::FormatFeatureFlagBits::eSampledImageFilterLinear)},
       use_present_thread{Settings::values.async_presentation.GetValue()},
       last_render_surface{emu_window.GetWindowInfo().render_surface} {
 
@@ -127,9 +130,12 @@ PresentWindow::PresentWindow(Frontend::EmuWindow& emu_window_, const Instance& i
 
 #if CLAW_ENABLE_METALFX
     if (const auto config = Claw::GetSpatialUpscaleConfig(); !bottom_only && config && !config->failed.load()) {
-        auto* timeline = dynamic_cast<MasterSemaphoreTimeline*>(scheduler.GetMasterSemaphore());
-        upscale_context = Claw::MakeMetalFXContext(instance, timeline ? timeline->Handle()
-                                                                    : vk::Semaphore{});
+        if (blit_supported) {
+            auto* timeline = dynamic_cast<MasterSemaphoreTimeline*>(scheduler.GetMasterSemaphore());
+            upscale_context = Claw::MakeMetalFXContext(instance, timeline ? timeline->Handle() : vk::Semaphore{});
+        } else {
+            config->Fail("Presentation format does not support scaling blits");
+        }
         if (!upscale_context && !Claw::MobileThermallyLimited()) Settings::values.resolution_factor.SetValue(4);
     }
 #endif
@@ -215,12 +221,12 @@ PresentWindow::~PresentWindow() {
 
 void PresentWindow::RecreateFrame(Frame* frame, u32 width, u32 height, [[maybe_unused]] bool allow_upscale) {
     vk::Device device = instance.GetDevice();
-    frame->thermal_limited = Claw::MobileThermallyLimited();
 #if CLAW_ENABLE_METALFX
     // The slot's presentation fence was waited before it reached this function.
     frame->metalfx.reset();
     frame->upscaled = false;
-    bool use_upscaler = !bottom_only && allow_upscale && upscale_context && Claw::SpatialUpscaleInputScale();
+    bool use_upscaler = !bottom_only && allow_upscale && upscale_context &&
+                        Claw::SpatialUpscaleConfiguredInputScale();
     const VkExportMetalObjectCreateInfoEXT export_info{
         .sType = VK_STRUCTURE_TYPE_EXPORT_METAL_OBJECT_CREATE_INFO_EXT,
         .exportObjectType = VK_EXPORT_METAL_OBJECT_TYPE_METAL_TEXTURE_BIT_EXT};
@@ -333,6 +339,8 @@ void PresentWindow::RecreateFrame(Frame* frame, u32 width, u32 height, [[maybe_u
 
     frame->width = width;
     frame->height = height;
+    frame->rendered_width = width;
+    frame->rendered_height = height;
 #if CLAW_ENABLE_METALFX
     if (use_upscaler) {
         const vk::Extent2D output{width * 2, height * 2};
@@ -360,10 +368,13 @@ void PresentWindow::RecreateFrame(Frame* frame, u32 width, u32 height, [[maybe_u
 
 #if CLAW_ENABLE_METALFX
 Layout::FramebufferLayout PresentWindow::RenderLayout(const Layout::FramebufferLayout& output) const {
-    const int input_scale = Claw::SpatialUpscaleInputScale();
-    if (bottom_only || !upscale_context || !input_scale) return output;
-    return Layout::SingleFrameLayout(output.width * input_scale / 4,
-                                    output.height * input_scale / 4,
+    const int output_scale = std::max(1, Claw::mobile_base_presentation_scale.load());
+    const int metalfx_input = upscale_context ? Claw::SpatialUpscaleConfiguredInputScale() : 0;
+    const int target_scale = Claw::PresentationTargetScale(output_scale, metalfx_input, bottom_only,
+                                                           SupportsScaledPresent());
+    if (target_scale == output_scale) return output;
+    return Layout::SingleFrameLayout(output.width * target_scale / output_scale,
+                                    output.height * target_scale / output_scale,
                                     output.bottom_screen_enabled, false);
 }
 
@@ -549,7 +560,7 @@ void PresentWindow::CopyToSwapchain(Frame* frame) {
     const vk::Extent2D extent = swapchain.GetExtent();
     vk::Image source_image = frame->image;
     vk::ImageLayout source_layout = vk::ImageLayout::eTransferSrcOptimal;
-    u32 source_width = frame->width, source_height = frame->height;
+    u32 source_width = frame->rendered_width, source_height = frame->rendered_height;
     vk::AccessFlags source_access = vk::AccessFlagBits::eColorAttachmentWrite;
 #if CLAW_ENABLE_METALFX
     if (frame->upscaled) {
@@ -624,15 +635,17 @@ void PresentWindow::CopyToSwapchain(Frame* frame) {
                          vk::ImageLayout::eTransferDstOptimal,
                          MakeImageCopy(source_width, source_height, extent.width, extent.height));
     } else {
-        bool linear = bottom_only || Claw::restore_presentation.BypassScaler() || Settings::values.filter_mode.GetValue();
+        const bool reduced_area = frame->rendered_width != frame->width ||
+                                  frame->rendered_height != frame->height;
+        bool linear = bottom_only || reduced_area ||
+                      Claw::restore_presentation.BypassScaler() || Settings::values.filter_mode.GetValue();
 #if CLAW_ENABLE_METALFX
         linear = linear || (frame->metalfx && !frame->upscaled);
 #endif
         cmdbuf.blitImage(source_image, source_layout, swapchain_image,
                          vk::ImageLayout::eTransferDstOptimal,
                          MakeImageBlit(source_width, source_height, extent.width, extent.height),
-                         linear ? vk::Filter::eLinear
-                                                                 : vk::Filter::eNearest);
+                         linear && linear_blit_supported ? vk::Filter::eLinear : vk::Filter::eNearest);
     }
 
     cmdbuf.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands,

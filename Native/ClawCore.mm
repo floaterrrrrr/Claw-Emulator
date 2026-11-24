@@ -5,10 +5,13 @@
 #include "SessionCleanup.hpp"
 #include "SpatialUpscaleConfig.hpp"
 #include "MobileTransitionCache.hpp"
+#include "MobilePresentation.hpp"
 #include "PerformanceWindow.hpp"
 #include "FrameworkProbe.hpp"
 #include "MetalFXSpatial.hpp"
 #include "RestorePresentation.hpp"
+#include "ThreeDSPerformance.hpp"
+#include "PicaTevUbershader.hpp"
 #include "audio_core/coreaudio_sink.h"
 #include "configuration.h"
 #include "emu_window_vk.h"
@@ -175,6 +178,10 @@ void ProbeBundledFFmpeg(const std::string& dataRoot) {
 }
 
 void applyProfile(int resolution, int clock, [[maybe_unused]] bool asyncShaders) {
+    NSUserDefaults* defaults = NSUserDefaults.standardUserDefaults;
+    const bool anisotropy = [defaults objectForKey:@"threeDSAnisotropicFiltering"]
+        ? [defaults boolForKey:@"threeDSAnisotropicFiltering"] : Claw::DefaultThreeDSAnisotropy;
+    Claw::three_ds_anisotropy_enabled.store(anisotropy, std::memory_order_relaxed);
     auto& v = Settings::values;
     v.use_cpu_jit.SetValue(false);
     v.use_fastinterp.SetValue(true);
@@ -434,14 +441,22 @@ int Claw3DSLoad(const char* rom, const char* dataDirectory, void* topLayer, void
         ownedBottomLayer = (__bridge CAMetalLayer*)bottomLayer;
         Claw::ConfigureSpatialUpscale(upscaleInput);
         if (const auto config = Claw::GetSpatialUpscaleConfig()) {
-            if (!Claw::SupportsSpatialScaler(ownedTopLayer.device) ||
-                !Claw::SupportsSpatialScaler(ownedBottomLayer.device))
+            if (!Claw::SupportsSpatialScaler(ownedTopLayer.device))
                 config->Fail("MetalFX unsupported by display device");
         }
         const bool requestedUpscale = upscaleInput == 2 || upscaleInput == 3;
         const int internalScale = requestedUpscale
             ? (Claw::SpatialUpscaleInputScale() ? 2 : 4) : resolution;
         applyProfile(internalScale, cpuClock, asyncShaders);
+        NSUserDefaults* defaults = NSUserDefaults.standardUserDefaults;
+        Claw::pica_tev_ubershader_enabled.store(
+            ![defaults objectForKey:@"threeDSReduceShaderStutter"] ||
+                [defaults boolForKey:@"threeDSReduceShaderStutter"],
+            std::memory_order_relaxed);
+        const bool thermal_protection = ![defaults objectForKey:@"threeDSThermalProtection"] ||
+            [defaults boolForKey:@"threeDSThermalProtection"];
+        Claw::mobile_oled_vivid.store([defaults boolForKey:@"threeDSOLEDVivid"],
+                                     std::memory_order_relaxed);
         // Preserve the requested internal scale through both display surfaces.
         const int scale = requestedUpscale ? 4 : Claw3DSPresentationScale(resolution);
         Claw::mobile_base_presentation_scale.store(scale);
@@ -485,10 +500,13 @@ int Claw3DSLoad(const char* rom, const char* dataDirectory, void* topLayer, void
         gate.begin();
         gate.pause(true);
         AudioCore::SetCoreAudioPaused(true);
+        Claw::mobile_requested_thermal_state.store(
+            static_cast<int>(NSProcessInfo.processInfo.thermalState), std::memory_order_relaxed);
         active.store(true);
-        emulationThread = std::thread([preferred_resolution = Settings::values.resolution_factor.GetValue()] {
+        emulationThread = std::thread([thermal_protection] {
             @autoreleasepool {
-                pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0);
+                // Highest interactive scheduling hint; iOS retains core placement.
+                pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
                 auto& system = Core::System::GetInstance();
                 auto lastSample = std::chrono::steady_clock::now();
                 bool wasPaused = true;
@@ -517,18 +535,10 @@ int Claw3DSLoad(const char* rom, const char* dataDirectory, void* topLayer, void
                         const int requested_heat = Claw::mobile_requested_thermal_state.load(std::memory_order_relaxed);
                         const int previous_heat = Claw::mobile_applied_thermal_state.load(std::memory_order_relaxed);
                         if (requested_heat >= 2 || previous_heat >= 2) {
-                            const int applied_heat = thermal.Observe(requested_heat, std::chrono::steady_clock::now());
+                            const int applied_heat = thermal.Observe(
+                                requested_heat, std::chrono::steady_clock::now(), thermal_protection);
                             if (applied_heat != previous_heat)
                                 Claw::mobile_applied_thermal_state.store(applied_heat, std::memory_order_relaxed);
-                            int restored_scale = preferred_resolution;
-                            if (applied_heat == 0) {
-                                if (const auto config = Claw::GetSpatialUpscaleConfig(); config && config->failed.load())
-                                    restored_scale = 4;
-                            }
-                            const int target_scale = Claw::ThermalRenderScale(restored_scale,
-                                Claw::mobile_base_presentation_scale.load(), applied_heat);
-                            if (Settings::values.resolution_factor.GetValue() != target_scale)
-                                Settings::values.resolution_factor.SetValue(target_scale);
                         }
                         if (paused) { wasPaused = true; continue; }
                         if (wasPaused) {

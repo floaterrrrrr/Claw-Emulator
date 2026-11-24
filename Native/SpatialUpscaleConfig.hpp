@@ -20,6 +20,7 @@ private:
 // Each session owns a separate token: an old GPU callback cannot alter a new game.
 void ConfigureSpatialUpscale(int input_scale);
 std::shared_ptr<SpatialUpscaleConfig> GetSpatialUpscaleConfig();
+int SpatialUpscaleConfiguredInputScale();
 int SpatialUpscaleInputScale();
 // 0 off, 2 ready, 1 encoding, -1 unavailable (native 4x fallback).
 int SpatialUpscaleStatus();

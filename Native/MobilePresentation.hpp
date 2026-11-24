@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <initializer_list>
 #include <span>
 
 namespace Claw {
+// Set before a 3DS renderer starts. The presentation shader reads this only
+// for on-screen draws, so save previews keep their original colors.
+inline std::atomic_bool mobile_oled_vivid{false};
+
 // Owned by the emulation worker. At 4x, publish the latest screen contents at
 // most 60 times/second; never discard guest CPU/DSP ticks or rendered GPU work.
 // This is presentation decimation, not a new worker or a display refresh change.

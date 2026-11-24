@@ -49,6 +49,10 @@ public:
     ~RasterizerVulkan() override;
 
     void TickFrame();
+    void BeginBlockingPipelineLoad() { pipeline_cache.BeginBlockingLoad(); }
+    void PumpBackgroundPipelines(bool presentation_completed) {
+        pipeline_cache.PumpBackgroundPipelines(presentation_completed);
+    }
     void WaitShaderResources() { pipeline_cache.WaitShaderResources(); }
     void LoadDefaultDiskResources(const std::atomic_bool& stop_loading,
                                   const VideoCore::DiskResourceLoadCallback& callback) override;

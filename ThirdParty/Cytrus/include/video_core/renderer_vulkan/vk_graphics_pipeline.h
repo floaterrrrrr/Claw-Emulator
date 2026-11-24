@@ -287,18 +287,23 @@ public:
     explicit GraphicsPipeline(const Instance& instance, RenderManager& renderpass_cache,
                               const PipelineInfo& info, vk::PipelineCache pipeline_cache,
                               vk::PipelineLayout layout, std::array<Shader*, 3> stages,
-                              Common::ThreadWorker* worker);
+                              Common::ThreadWorker* worker, bool optional = false);
     ~GraphicsPipeline();
 
     bool TryBuild(bool wait_built);
+    bool QueueBackgroundBuild();
 
     bool Build(bool fail_on_compile_required = false);
 
     [[nodiscard]] vk::Pipeline Handle() const noexcept {
         return *pipeline;
     }
+    [[nodiscard]] bool HasHandle() const noexcept { return static_cast<bool>(pipeline); }
 
 private:
+    bool ShadersPending() const;
+    bool QueueBuild(Common::WorkPriority priority);
+
     const Instance& instance;
     RenderManager& renderpass_cache;
     Common::ThreadWorker* worker;
@@ -309,7 +314,9 @@ private:
 
     PipelineInfo info;
     std::array<Shader*, 3> stages;
-    bool is_pending{};
+    bool optional;
+    Common::ThreadWorker::WorkId pending_work{};
+    bool queued_in_background{};
 };
 
 } // namespace Vulkan

@@ -23,20 +23,35 @@ int main() {
     assert(governor.Observe(2, now + 92s) == 2);
     assert(governor.Observe(0, now + 93s) == 2);
     assert(governor.Observe(0, now + 123s) == 0);
-    assert(ThermalRenderScale(2, 4, 0) == 2); // Existing MetalFX 2x -> 4x.
-    assert(ThermalRenderScale(2, 4, 1) == 2);
-    assert(ThermalRenderScale(2, 4, 2) == 2); // Now native 2x, no MetalFX.
-    assert(ThermalRenderScale(4, 4, 2) == 2);
-    assert(ThermalRenderScale(2, 2, 2) == 1);
-    assert(ThermalRenderScale(3, 3, 2) == 2);
-    assert(ThermalRenderScale(1, 1, 2) == 1);
-    for (int input : {1, 2, 3, 4}) assert(ThermalRenderScale(input, 4, 3) == 1);
+    assert(governor.Observe(3, now + 124s) == 3);
+    assert(governor.Observe(1, now + 125s) == 3);
+    assert(governor.Observe(3, now + 129s, false) == 0);
+    assert(governor.Observe(3, now + 130s, false) == 0);
+    assert(governor.Observe(2, now + 131s) == 2);
+    assert(governor.Observe(1, now + 132s) == 2);
+    assert(governor.Observe(0, now + 161s) == 2);
+    assert(governor.Observe(0, now + 162s) == 0);
+
+    assert(PresentationTargetScale(4, 2, false, true) == 2);
+    assert(PresentationTargetScale(4, 0, false, true) == 4);
+    assert(PresentationTargetScale(4, 0, true, true) == 2);
+    assert(PresentationTargetScale(1, 0, true, true) == 1);
+    assert(PresentationTargetScale(4, 0, true, false) == 4);
+    assert(ThermalPresentationScale(2, 4, true, 0) == 2);
+    assert(ThermalPresentationScale(2, 4, true, 1) == 2);
+    assert(ThermalPresentationScale(2, 4, true, 2) == 2);
+    assert(ThermalPresentationScale(4, 4, true, 2) == 2);
+    assert(ThermalPresentationScale(2, 2, true, 2) == 1);
+    assert(ThermalPresentationScale(3, 3, true, 2) == 2);
+    assert(ThermalPresentationScale(4, 4, false, 3) == 4);
+    for (int target : {1, 2, 3, 4}) assert(ThermalPresentationScale(target, 4, true, 3) == 1);
     assert(ThermalPresentationFPS(0) == 60 && ThermalPresentationFPS(3) == 30);
     ConfigureSpatialUpscale(2);
     const auto session = GetSpatialUpscaleConfig();
     assert(SpatialUpscaleInputScale() == 2);
     mobile_applied_thermal_state.store(2);
     assert(SpatialUpscaleInputScale() == 0 && SpatialUpscaleStatus() == 0);
+    assert(SpatialUpscaleConfiguredInputScale() == 2);
     assert(GetSpatialUpscaleConfig() == session && !session->failed.load());
     mobile_applied_thermal_state.store(0);
     assert(SpatialUpscaleInputScale() == 2); // Same session resumes, not rebuilt.

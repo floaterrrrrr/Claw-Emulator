@@ -6,3 +6,7 @@ trap 'rm -rf "$task_vulkan_test_dir"' EXIT
 "${CXX:-c++}" -std=c++20 -O2 -Wall -Wextra -Werror -I Native \
     Tests/vulkan_presentation_cache_tests.cpp -o "$task_vulkan_test_dir/presentation-cache-tests"
 "$task_vulkan_test_dir/presentation-cache-tests"
+"${CXX:-c++}" -std=c++20 -O2 -Wall -Wextra -Werror -pthread \
+    -isystem ThirdParty/Cytrus/include Tests/vulkan_pipeline_worker_tests.cpp \
+    -o "$task_vulkan_test_dir/pipeline-worker-tests"
+"$task_vulkan_test_dir/pipeline-worker-tests"

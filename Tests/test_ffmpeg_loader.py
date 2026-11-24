@@ -124,7 +124,8 @@ def main():
         (fake / "common/dynamic_library/dynamic_library.h").write_text(FAKE_LIBRARY)
         (fake / "common/logging/log.h").write_text(
             "#pragma once\n#define LOG_WARNING(...) ((void)0)\n#define LOG_INFO(...) ((void)0)\n")
-        (fake / "TargetConditionals.h").write_text("#pragma once\n#define TARGET_OS_IPHONE 1\n")
+        (fake / "TargetConditionals.h").write_text(
+            "#pragma once\n#undef TARGET_OS_IPHONE\n#define TARGET_OS_IPHONE 1\n")
         harness = work / "loader.cpp"
         harness.write_text(HARNESS)
         binary = work / ("loader.exe" if os.name == "nt" else "loader")
